@@ -1,4 +1,6 @@
 ---
+import CaptionModal from './CaptionModal.astro';
+
 interface Props {
     imageUrl?: string;
 }
@@ -12,16 +14,29 @@ const { imageUrl } = Astro.props;
             <img id="modal-image" src="" alt="" class="max-w-[95vw] max-h-[95vh] w-auto h-auto object-contain" />
         </div>
         <div id="modal-footer" class="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm p-4 text-white text-sm">
-            <div class="container mx-auto flex justify-between items-center">
-                <div id="modal-filename" class="font-medium"></div>
-                <div class="flex gap-4">
-                    <div id="modal-size" class="text-gray-300"></div>
-                    <div id="modal-date" class="text-gray-300"></div>
+            <div class="container mx-auto">
+                <div class="flex justify-between items-center mb-2">
+                    <div id="modal-filename" class="font-medium"></div>
+                    <div class="flex gap-4">
+                        <div id="modal-size" class="text-gray-300"></div>
+                        <div id="modal-date" class="text-gray-300"></div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div id="caption-status" class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full"></span>
+                        <span class="text-sm">Caption Status</span>
+                    </div>
+                    <button id="caption-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors">
+                        Manage Caption
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<CaptionModal imageId="" />
 
 <script>
     let modal: HTMLElement | null = null;
@@ -29,9 +44,11 @@ const { imageUrl } = Astro.props;
     let modalFilename: HTMLElement | null = null;
     let modalSize: HTMLElement | null = null;
     let modalDate: HTMLElement | null = null;
+    let captionButton: HTMLElement | null = null;
     let imageElements: HTMLImageElement[] = [];
     let currentImageIndex = -1;
     let isLoadingMore = false;
+    let currentImageId: string | null = null;
 
     function formatFileSize(bytes: number): string {
         if (bytes === 0) return '0 Bytes';
@@ -66,11 +83,24 @@ const { imageUrl } = Astro.props;
             const filename = img.getAttribute('data-filename');
             const size = img.getAttribute('data-size');
             const created = img.getAttribute('data-created');
+            const imageId = img.getAttribute('data-id');
+            const hasCaption = img.getAttribute('data-has-caption') === 'true';
+            const hasTags = img.getAttribute('data-has-tags') === 'true';
+            const collectionName = img.getAttribute('data-collection');
             
             if (imageUrl && modalImage) modalImage.src = imageUrl;
             if (filename && modalFilename) modalFilename.textContent = filename;
             if (size && modalSize) modalSize.textContent = formatFileSize(parseInt(size));
             if (created && modalDate) modalDate.textContent = formatDate(created);
+            if (imageId) currentImageId = imageId;
+
+            // Update caption status
+            const statusDot = document.querySelector('#caption-status .w-2');
+            const statusText = document.querySelector('#caption-status span:last-child');
+            if (statusDot && statusText) {
+                statusDot.className = `w-2 h-2 rounded-full ${hasCaption ? 'bg-green-500' : 'bg-red-500'}`;
+                statusText.textContent = hasCaption ? 'Has Caption' : 'No Caption';
+            }
 
             // If we're at the last image and trying to go next, trigger loading more
             if (direction === 'next' && currentImageIndex === imageElements.length - 1 && !isLoadingMore) {
@@ -93,8 +123,19 @@ const { imageUrl } = Astro.props;
         }
     }
 
-    function openModal(imageUrl: string, filename: string, size: string, created: string) {
+    async function openModal(
+        imageUrl: string,
+        filename: string,
+        size: string,
+        created: string,
+        imageId: string,
+        hasCaption: boolean,
+        hasTags: boolean,
+        collectionName: string
+    ) {
         if (!modal || !modalImage || !modalFilename || !modalSize || !modalDate) return;
+        
+        currentImageId = imageId;
         
         // Update image elements list
         imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
@@ -112,6 +153,14 @@ const { imageUrl } = Astro.props;
         modalDate.textContent = formatDate(created);
         modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
+
+        // Update caption status
+        const statusDot = document.querySelector('#caption-status .w-2');
+        const statusText = document.querySelector('#caption-status span:last-child');
+        if (statusDot && statusText) {
+            statusDot.className = `w-2 h-2 rounded-full ${hasCaption ? 'bg-green-500' : 'bg-red-500'}`;
+            statusText.textContent = hasCaption ? 'Has Caption' : 'No Caption';
+        }
     }
 
     function closeModal() {
@@ -127,6 +176,7 @@ const { imageUrl } = Astro.props;
         modalFilename = document.getElementById('modal-filename');
         modalSize = document.getElementById('modal-size');
         modalDate = document.getElementById('modal-date');
+        captionButton = document.getElementById('caption-button');
 
         // Get all image elements
         imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
@@ -136,6 +186,13 @@ const { imageUrl } = Astro.props;
             const target = e.target as HTMLElement;
             if (target.id === 'modal-background') {
                 closeModal();
+            }
+        });
+
+        // Caption button click handler
+        captionButton?.addEventListener('click', () => {
+            if (currentImageId) {
+                (window as any).openCaptionModal(currentImageId);
             }
         });
 

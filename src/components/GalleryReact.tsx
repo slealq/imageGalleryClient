@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { ImageData, Row } from '../types/gallery';
 import { processImages } from '../utils/imageProcessing';
+import { fetchImages, getImageUrl } from '../utils/api';
 
 interface GalleryReactProps {
   initialImages: ImageData[];
@@ -31,19 +32,15 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
     const nextPage = currentPage + 1;
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/images?page=${nextPage}&page_size=20`);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      
-      const data = await response.json();
-      const newImages = data.images;
+      const { images: newImages, total_pages } = await fetchImages(nextPage, 20);
 
       if (!newImages || newImages.length === 0) {
         setHasMorePages(false);
         return;
       }
 
-      if (data.total_pages) {
-        setTotalPages(data.total_pages);
+      if (total_pages) {
+        setTotalPages(total_pages);
       }
 
       const newRows = processImages(newImages);
@@ -85,10 +82,14 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
   const handleImageClick = (image: ImageData) => {
     if (window.openModal) {
       window.openModal(
-        `http://127.0.0.1:8000/images/${image.id}`,
+        getImageUrl(image.id),
         image.filename,
         image.size.toString(),
-        image.created_at
+        image.created_at,
+        image.id,
+        image.has_caption,
+        image.has_tags,
+        image.collection_name
       );
     }
   };
@@ -123,7 +124,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
               >
                 <div className="transition-all duration-300 ease-in-out group-hover:scale-110 group-hover:shadow-2xl">
                   <img
-                    src={`http://127.0.0.1:8000/images/${img.id}`}
+                    src={getImageUrl(img.id)}
                     width={img.width * 0.5}
                     height={img.height * 0.5}
                     className="w-auto h-auto max-w-full max-h-full object-contain"
@@ -131,6 +132,10 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
                     data-filename={img.filename}
                     data-size={img.size}
                     data-created={img.created_at}
+                    data-id={img.id}
+                    data-has-caption={img.has_caption}
+                    data-has-tags={img.has_tags}
+                    data-collection={img.collection_name}
                   />
                 </div>
               </div>

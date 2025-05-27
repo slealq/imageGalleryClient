@@ -4,12 +4,10 @@ import Modal from './Modal.astro';
 import Drawer from './Drawer.astro';
 import "../styles/global.css";
 import { processImages } from "../utils/imageProcessing";
+import { fetchImages } from "../utils/api";
 
 // Initial fetch with pagination
-const response = await fetch("http://127.0.0.1:8000/images?page=1&page_size=20");
-const jsonBody = await response.json();
-const imagesData = jsonBody["images"];
-const initialTotalPages = jsonBody["total_pages"] || 1;
+const { images: imagesData, total_pages: initialTotalPages } = await fetchImages(1, 20);
 
 // Process images into rows
 const rows = processImages(imagesData);
