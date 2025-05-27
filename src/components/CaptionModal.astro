@@ -76,6 +76,13 @@ const { imageId } = Astro.props;
         try {
             await saveImageCaption(currentImageId, captionText.value);
             updateCaptionStatus(captionText.value.length > 0);
+            
+            // Update the data attributes on the image element
+            const imageElement = document.querySelector(`img[data-id="${currentImageId}"]`);
+            if (imageElement) {
+                imageElement.setAttribute('data-has-caption', captionText.value.length > 0 ? 'true' : 'false');
+            }
+            
             captionModal?.classList.add('hidden');
         } catch (error) {
             console.error('Error saving caption:', error);
@@ -100,12 +107,23 @@ const { imageId } = Astro.props;
 
         // Save caption button handler
         saveCaptionBtn?.addEventListener('click', handleSaveCaption);
+
+        // Add keyboard event handler for escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && captionModal && !captionModal.classList.contains('hidden')) {
+                captionModal.classList.add('hidden');
+            }
+        });
     });
 
     // Make functions available globally
     (window as any).openCaptionModal = (imageId: string) => {
         currentImageId = imageId;
         captionModal?.classList.remove('hidden');
+        // Clear the textarea before loading new caption
+        if (captionText) {
+            captionText.value = '';
+        }
         loadCaption();
     };
 </script> 

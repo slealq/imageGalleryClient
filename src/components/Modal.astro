@@ -102,6 +102,12 @@ const { imageUrl } = Astro.props;
                 statusText.textContent = hasCaption ? 'Has Caption' : 'No Caption';
             }
 
+            // If caption modal is open, update it with the new image's caption
+            const captionModal = document.getElementById('caption-modal');
+            if (captionModal && !captionModal.classList.contains('hidden') && imageId) {
+                (window as any).openCaptionModal(imageId);
+            }
+
             // If we're at the last image and trying to go next, trigger loading more
             if (direction === 'next' && currentImageIndex === imageElements.length - 1 && !isLoadingMore) {
                 isLoadingMore = true;
@@ -208,7 +214,13 @@ const { imageUrl } = Astro.props;
                     navigateImage('next');
                     break;
                 case 'Escape':
-                    closeModal();
+                    // Check if caption modal is open first
+                    const captionModal = document.getElementById('caption-modal');
+                    if (captionModal && !captionModal.classList.contains('hidden')) {
+                        captionModal.classList.add('hidden');
+                    } else {
+                        closeModal();
+                    }
                     break;
             }
         });
