@@ -10,7 +10,7 @@ const { imageUrl } = Astro.props;
     id="modal"
     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 transition-opacity duration-300 opacity-0 pointer-events-none"
 >
-    <div class="relative w-full h-full flex items-center justify-center p-4">
+    <div id="background" class="relative w-full h-full flex items-center justify-center p-4">
         <img 
             id="modalImage"
             src={imageUrl} 
@@ -69,7 +69,8 @@ const { imageUrl } = Astro.props;
 
     // Close on click outside image
     document.getElementById('modal')?.addEventListener('click', (e) => {
-        if (e.target === e.currentTarget) {
+        const target = e.target as HTMLElement;
+        if (target.id === 'background') {
             window.closeModal();
         }
     });
