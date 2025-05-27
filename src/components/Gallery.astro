@@ -1,369 +1,70 @@
 ---
-import Image from "./Image.astro"
-import Modal from "./Modal.astro"
-import Drawer from "./Drawer.astro"
+import GalleryReact from './GalleryReact';
+import Modal from './Modal.astro';
+import Drawer from './Drawer.astro';
 import "../styles/global.css";
 import { processImages } from "../utils/imageProcessing";
 
 // Initial fetch with pagination
-const response = await fetch("http://127.0.0.1:8000/images?page=1&page_size=20")
+const response = await fetch("http://127.0.0.1:8000/images?page=1&page_size=20");
 const jsonBody = await response.json();
 const imagesData = jsonBody["images"];
 const initialTotalPages = jsonBody["total_pages"] || 1;
 
 // Process images into rows
 const rows = processImages(imagesData);
-
-// Determine the last row type for client-side processing
-const lastRowType = rows.length > 0 ? rows[rows.length - 1].type : null;
 ---
 
 <div class="container mx-auto px-1 space-y-2">
-    <!-- Add a button to open the drawer -->
-    <div class="flex justify-end mb-4">
-        <button
-            type="button"
-            class="rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-            onclick="window.openDrawer()"
-        >
-            Open Drawer
-        </button>
-    </div>
-
-    <div id="gallery-grid" class="flex flex-col gap-2">
-        {
-            rows.map((row) => (
-                <div class={`grid gap-1 ${row.type === 'landscape' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'}`}>
-                    {
-                        row.images.map((img) => (
-                            <div 
-                                class="cursor-pointer overflow-hidden flex items-center justify-center bg-black/20 backdrop-blur-sm p-1 group rounded-sm"
-                                data-image-url={`http://127.0.0.1:8000/images/${img.id}`}
-                                data-filename={img.filename}
-                                data-size={img.size}
-                                data-created={img.created_at}
-                            >
-                                <div class="transition-all duration-300 ease-in-out group-hover:scale-110 group-hover:shadow-2xl">
-                                    <Image 
-                                        id={img.id} 
-                                        width={img.width} 
-                                        height={img.height} 
-                                        scale={0.5}
-                                        filename={img.filename}
-                                        size={img.size}
-                                        created_at={new Date(img.created_at)}
-                                    />
-                                </div>
-                            </div>
-                        ))
-                    }
-                </div>
-            ))
-        }
-    </div>
-    <!-- Add a loading indicator that will be observed -->
-    <div id="loading-trigger" class="h-10 w-full"></div>
+  <GalleryReact client:load initialImages={imagesData} initialTotalPages={initialTotalPages} />
 </div>
 
-<Modal imageUrl="" />
+<Modal />
 
-<!-- Add the Drawer component -->
 <Drawer title="Gallery Settings" isOpen={false}>
-    <div class="space-y-4">
-        <div>
-            <h3 class="text-lg font-medium text-gray-900">Display Settings</h3>
-            <p class="text-sm text-gray-500">Customize how your gallery is displayed.</p>
-        </div>
-        <div class="space-y-2">
-            <label class="flex items-center">
-                <input type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
-                <span class="ml-2 text-sm text-gray-600">Show image details</span>
-            </label>
-            <label class="flex items-center">
-                <input type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
-                <span class="ml-2 text-sm text-gray-600">Enable hover effects</span>
-            </label>
-        </div>
+  <div class="space-y-4">
+    <div>
+      <h3 class="text-lg font-medium text-gray-900">Display Settings</h3>
+      <p class="text-sm text-gray-500">Customize how your gallery is displayed.</p>
     </div>
+    <div class="space-y-2">
+      <label class="flex items-center">
+        <input type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+        <span class="ml-2 text-sm text-gray-600">Show image details</span>
+      </label>
+      <label class="flex items-center">
+        <input type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+        <span class="ml-2 text-sm text-gray-600">Enable hover effects</span>
+      </label>
+    </div>
+  </div>
 </Drawer>
 
-<script is:inline>
-// Global variables to store pending images
-window.pendingLandscapeImages = [];
-window.pendingPortraitImages = [];
-
-// Global function for processing new images
-window.processNewImages = function(newImages, lastRowType) {
-    const rows = [];
-    let currentRow = [];
-    let currentRowType = lastRowType;
-
-    // If no last row type is provided, determine it from the DOM
-    if (!currentRowType) {
-        const galleryGrid = document.getElementById('gallery-grid');
-        if (galleryGrid && galleryGrid.lastElementChild) {
-            const lastRow = galleryGrid.lastElementChild;
-            if (lastRow.classList.contains('grid-cols-2')) {
-                currentRowType = 'portrait'; // Next row should be portrait
-            } else if (lastRow.classList.contains('grid-cols-3')) {
-                currentRowType = 'landscape'; // Next row should be landscape
-            }
-        }
-    }
-
-    function addRow() {
-        if (currentRow.length > 0 && currentRowType) {
-            const rowDiv = document.createElement('div');
-            rowDiv.className = `grid gap-1 ${currentRowType === 'landscape' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'}`;
-
-            currentRow.forEach(img => {
-                const imageDiv = document.createElement('div');
-                imageDiv.className = 'cursor-pointer overflow-hidden flex items-center justify-center bg-black/20 backdrop-blur-sm p-1 group rounded-sm';
-                imageDiv.setAttribute('data-image-url', `http://127.0.0.1:8000/images/${img.id}`);
-                imageDiv.setAttribute('data-filename', img.filename);
-                imageDiv.setAttribute('data-size', img.size.toString());
-                imageDiv.setAttribute('data-created', img.created_at);
-
-                const innerDiv = document.createElement('div');
-                innerDiv.className = 'transition-all duration-300 ease-in-out group-hover:scale-110 group-hover:shadow-2xl';
-
-                const imgElement = document.createElement('img');
-                imgElement.src = `http://127.0.0.1:8000/images/${img.id}`;
-                imgElement.width = img.width * 0.5;
-                imgElement.height = img.height * 0.5;
-                imgElement.className = 'w-auto h-auto max-w-full max-h-full object-contain';
-                imgElement.loading = 'lazy';
-
-                innerDiv.appendChild(imgElement);
-                imageDiv.appendChild(innerDiv);
-                rowDiv.appendChild(imageDiv);
-
-                // Add click handler
-                imageDiv.addEventListener('click', () => {
-                    if (window.openModal) {
-                        window.openModal(
-                            `http://127.0.0.1:8000/images/${img.id}`,
-                            img.filename,
-                            img.size.toString(),
-                            img.created_at
-                        );
-                    }
-                });
-            });
-
-            rows.push(rowDiv);
-            currentRow = [];
-            return currentRowType;
-        }
-        return null;
-    }
-
-    // Sort new images into landscape and portrait
-    newImages.forEach(img => {
-        const isLandscape = img.width / img.height > 1;
-        if (isLandscape) {
-            window.pendingLandscapeImages.push(img);
-        } else {
-            window.pendingPortraitImages.push(img);
-        }
-    });
-
-    // Process rows based on the current type
-    while (true) {
-        let rowCreated = false;
-
-        // Try to create a row of the current type
-        if (currentRowType === 'landscape' && window.pendingLandscapeImages.length >= 2) {
-            currentRow = window.pendingLandscapeImages.splice(0, 2);
-            currentRowType = addRow();
-            if (currentRowType) {
-                currentRowType = 'portrait';
-                rowCreated = true;
-            }
-        } else if (currentRowType === 'portrait' && window.pendingPortraitImages.length >= 3) {
-            currentRow = window.pendingPortraitImages.splice(0, 3);
-            currentRowType = addRow();
-            if (currentRowType) {
-                currentRowType = 'landscape';
-                rowCreated = true;
-            }
-        }
-
-        // If we couldn't create a row of the current type, try the other type
-        if (!rowCreated) {
-            if (currentRowType === 'landscape' && window.pendingPortraitImages.length >= 3) {
-                currentRowType = 'portrait';
-                currentRow = window.pendingPortraitImages.splice(0, 3);
-                currentRowType = addRow();
-                if (currentRowType) {
-                    currentRowType = 'landscape';
-                    rowCreated = true;
-                }
-            } else if (currentRowType === 'portrait' && window.pendingLandscapeImages.length >= 2) {
-                currentRowType = 'landscape';
-                currentRow = window.pendingLandscapeImages.splice(0, 2);
-                currentRowType = addRow();
-                if (currentRowType) {
-                    currentRowType = 'portrait';
-                    rowCreated = true;
-                }
-            }
-        }
-
-        // If we still couldn't create a row, break and wait for more images
-        if (!rowCreated) {
-            break;
-        }
-    }
-
-    return { rows, lastRowType: currentRowType };
-};
-</script>
-
-<script define:vars={{ initialTotalPages, lastRowType }}>
-    let currentPage = 1;
-    let isLoading = false;
-    let totalPages = initialTotalPages;
-    let hasMorePages = true;
-    let currentLastRowType = lastRowType;
-
-    // Initialize the last row type from the DOM if not provided
-    if (!currentLastRowType) {
-        const galleryGrid = document.getElementById('gallery-grid');
-        if (galleryGrid && galleryGrid.lastElementChild) {
-            const lastRow = galleryGrid.lastElementChild;
-            if (lastRow.classList.contains('grid-cols-2')) {
-                currentLastRowType = 'portrait';
-            } else if (lastRow.classList.contains('grid-cols-3')) {
-                currentLastRowType = 'landscape';
-            }
-        }
-    }
-
-    async function loadMoreImages() {
-        if (isLoading || !hasMorePages) {
-            console.log('Already loading or no more pages:', { isLoading, hasMorePages });
-            return;
-        }
+<script>
+  // Add click handlers to all image containers
+  document.addEventListener('DOMContentLoaded', () => {
+    const imageContainers = document.querySelectorAll('[data-image-url]');
+    imageContainers.forEach(container => {
+      container.addEventListener('click', () => {
+        const imageUrl = container.getAttribute('data-image-url');
+        const filename = container.getAttribute('data-filename');
+        const size = container.getAttribute('data-size');
+        const created = container.getAttribute('data-created');
         
-        if (currentPage >= totalPages) {
-            console.log('Reached last page:', currentPage, 'of', totalPages);
-            hasMorePages = false;
-            return;
+        if (imageUrl && filename && size && created) {
+          // Use the Modal's openModal function which handles keyboard navigation
+          const modal = document.getElementById('modal');
+          if (modal) {
+            const modalScript = modal.querySelector('script');
+            if (modalScript) {
+              const openModalFunction = (window as any).openModal;
+              if (openModalFunction) {
+                openModalFunction(imageUrl, filename, size, created);
+              }
+            }
+          }
         }
-        
-        console.log('Starting to load page:', currentPage + 1, 'of', totalPages, 'with last row type:', currentLastRowType);
-        isLoading = true;
-        currentPage++;
-        
-        try {
-            console.log('Fetching images from API...');
-            const response = await fetch(`http://127.0.0.1:8000/images?page=${currentPage}&page_size=20`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            console.log('API Response:', {
-                page: currentPage,
-                totalPages: data.total_pages,
-                imagesReceived: data.images?.length || 0
-            });
-            
-            const newImages = data.images;
-            if (!newImages || newImages.length === 0) {
-                console.log('No new images received');
-                hasMorePages = false;
-                return;
-            }
-            
-            // Update total pages from the API response
-            if (data.total_pages) {
-                totalPages = data.total_pages;
-                console.log('Updated total pages:', totalPages);
-            }
-            
-            const galleryGrid = document.getElementById('gallery-grid');
-            if (!galleryGrid) {
-                console.error('Gallery grid not found');
-                return;
-            }
-
-            // Process new images into rows using the global function
-            console.log('Processing new images with last row type:', currentLastRowType);
-            const { rows: newRows, lastRowType: newLastRowType } = window.processNewImages(newImages, currentLastRowType);
-            currentLastRowType = newLastRowType;
-            
-            console.log('Processing results:', {
-                newRowsCreated: newRows.length,
-                pendingLandscape: window.pendingLandscapeImages.length,
-                pendingPortrait: window.pendingPortraitImages.length,
-                lastRowType: currentLastRowType
-            });
-            
-            // Append new rows to the gallery grid
-            newRows.forEach(row => {
-                galleryGrid.appendChild(row);
-            });
-            
-            // Re-observe the loading trigger
-            observeLoadingTrigger();
-            
-            // If we have pending images but couldn't create rows, trigger another load
-            if (newRows.length === 0 && 
-                (window.pendingLandscapeImages.length > 0 || window.pendingPortraitImages.length > 0)) {
-                console.log('Have pending images but no rows created, triggering another load...');
-                setTimeout(() => {
-                    isLoading = false;
-                    loadMoreImages();
-                }, 100);
-            }
-        } catch (error) {
-            console.error('Error loading more images:', error);
-        } finally {
-            isLoading = false;
-        }
-    }
-
-    // Expose loadMoreImages globally
-    window.loadMoreImages = loadMoreImages;
-
-    // Intersection Observer for infinite scroll
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting && !isLoading && hasMorePages) {
-                console.log('Loading trigger is visible, triggering load...');
-                loadMoreImages();
-            }
-        });
-    }, {
-        rootMargin: '200px',
-        threshold: 0.1
+      });
     });
-
-    // Observe the loading trigger
-    function observeLoadingTrigger() {
-        const loadingTrigger = document.getElementById('loading-trigger');
-        if (loadingTrigger) {
-            observer.observe(loadingTrigger);
-            console.log('Observing loading trigger');
-        } else {
-            console.error('Loading trigger not found');
-        }
-    }
-
-    // Initial observation
-    observeLoadingTrigger();
-
-    // Add click handlers to all image containers
-    document.querySelectorAll('[data-image-url]').forEach(container => {
-        container.addEventListener('click', () => {
-            const imageUrl = container.getAttribute('data-image-url');
-            const filename = container.getAttribute('data-filename');
-            const size = container.getAttribute('data-size');
-            const created = container.getAttribute('data-created');
-            if (imageUrl && filename && size && created && window.openModal) {
-                window.openModal(imageUrl, filename, size, created);
-            }
-        });
-    });
+  });
 </script>

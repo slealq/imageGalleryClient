@@ -1,6 +1,6 @@
 ---
 interface Props {
-    imageUrl: string;
+    imageUrl?: string;
 }
 
 const { imageUrl } = Astro.props;
@@ -29,7 +29,7 @@ const { imageUrl } = Astro.props;
     let modalFilename: HTMLElement | null = null;
     let modalSize: HTMLElement | null = null;
     let modalDate: HTMLElement | null = null;
-    let imageContainers: HTMLElement[] = [];
+    let imageElements: HTMLImageElement[] = [];
     let currentImageIndex = -1;
     let isLoadingMore = false;
 
@@ -56,16 +56,16 @@ const { imageUrl } = Astro.props;
         if (currentImageIndex === -1) return;
         
         let newIndex = direction === 'next' 
-            ? Math.min(currentImageIndex + 1, imageContainers.length - 1)
+            ? Math.min(currentImageIndex + 1, imageElements.length - 1)
             : Math.max(currentImageIndex - 1, 0);
             
         if (newIndex !== currentImageIndex) {
             currentImageIndex = newIndex;
-            const container = imageContainers[currentImageIndex];
-            const imageUrl = container.getAttribute('data-image-url');
-            const filename = container.getAttribute('data-filename');
-            const size = container.getAttribute('data-size');
-            const created = container.getAttribute('data-created');
+            const img = imageElements[currentImageIndex];
+            const imageUrl = img.src;
+            const filename = img.getAttribute('data-filename');
+            const size = img.getAttribute('data-size');
+            const created = img.getAttribute('data-created');
             
             if (imageUrl && modalImage) modalImage.src = imageUrl;
             if (filename && modalFilename) modalFilename.textContent = filename;
@@ -73,16 +73,16 @@ const { imageUrl } = Astro.props;
             if (created && modalDate) modalDate.textContent = formatDate(created);
 
             // If we're at the last image and trying to go next, trigger loading more
-            if (direction === 'next' && currentImageIndex === imageContainers.length - 1 && !isLoadingMore) {
+            if (direction === 'next' && currentImageIndex === imageElements.length - 1 && !isLoadingMore) {
                 isLoadingMore = true;
                 try {
                     // Call the global loadMoreImages function from Gallery
                     if (window.loadMoreImages) {
                         await window.loadMoreImages();
-                        // Update our containers list with newly loaded images
-                        imageContainers = Array.from(document.querySelectorAll('[data-image-url]')) as HTMLElement[];
+                        // Update our elements list with newly loaded images
+                        imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
                         // If we successfully loaded more images, navigate to the next one
-                        if (currentImageIndex < imageContainers.length - 1) {
+                        if (currentImageIndex < imageElements.length - 1) {
                             navigateImage('next');
                         }
                     }
@@ -96,13 +96,14 @@ const { imageUrl } = Astro.props;
     function openModal(imageUrl: string, filename: string, size: string, created: string) {
         if (!modal || !modalImage || !modalFilename || !modalSize || !modalDate) return;
         
-        // Find the container that matches this image
-        const container = imageContainers.find(container => 
-            container.getAttribute('data-image-url') === imageUrl
-        );
+        // Update image elements list
+        imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
         
-        if (container) {
-            currentImageIndex = imageContainers.indexOf(container);
+        // Find the image that matches this URL
+        const img = imageElements.find(img => img.src === imageUrl);
+        
+        if (img) {
+            currentImageIndex = imageElements.indexOf(img);
         }
         
         modalImage.src = imageUrl;
@@ -127,11 +128,10 @@ const { imageUrl } = Astro.props;
         modalSize = document.getElementById('modal-size');
         modalDate = document.getElementById('modal-date');
 
-        // Get all image containers
-        imageContainers = Array.from(document.querySelectorAll('[data-image-url]')) as HTMLElement[];
+        // Get all image elements
+        imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
 
         // Close modal when clicking outside the image
-        
         modal?.addEventListener('click', (e) => {
             const target = e.target as HTMLElement;
             if (target.id === 'modal-background') {
