@@ -8,7 +8,7 @@ const { imageId } = Astro.props;
 
 <!-- Caption Modal - Appears on top of the FullscreenModal -->
 <div id="caption-modal" class="fixed inset-0 bg-black/90 hidden z-[60] flex items-center justify-center transition-opacity duration-200">
-    <div id="caption-box" class="bg-gray-900/90 rounded-lg p-6 w-full max-w-2xl mx-4 transition-opacity duration-200">
+    <div id="caption-box" class="bg-gray-900/90 rounded-lg p-6 w-full max-w-2xl mx-4 transition-opacity duration-200 relative">
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-xl font-semibold text-white">Image Caption</h2>
             <div class="flex items-center gap-4">
@@ -34,6 +34,9 @@ const { imageId } = Astro.props;
                 </button>
             </div>
         </div>
+        <div id="timer" class="absolute bottom-2 right-2 text-sm text-gray-400 hidden">
+            Generating: <span id="timer-value">0</span>s
+        </div>
     </div>
 </div>
 
@@ -51,6 +54,10 @@ const { imageId } = Astro.props;
     let boxOpacityValue: HTMLElement | null = null;
     let currentOpacity = parseInt(localStorage.getItem('captionBackgroundOpacity') || '90');
     let currentBoxOpacity = parseInt(localStorage.getItem('captionBoxOpacity') || '90');
+    let timerElement: HTMLElement | null = null;
+    let timerValue: HTMLElement | null = null;
+    let timerInterval: number | null = null;
+    let startTime: number | null = null;
 
     function updateOpacity(value: number) {
         currentOpacity = value;
@@ -85,6 +92,31 @@ const { imageId } = Astro.props;
         }
     }
 
+    function startTimer() {
+        if (timerElement && timerValue) {
+            timerElement.classList.remove('hidden');
+            timerValue.textContent = '0';
+            startTime = Date.now();
+            timerInterval = window.setInterval(() => {
+                if (startTime && timerValue) {
+                    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                    timerValue.textContent = elapsed.toString();
+                }
+            }, 1000);
+        }
+    }
+
+    function stopTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        if (timerElement) {
+            timerElement.classList.add('hidden');
+        }
+        startTime = null;
+    }
+
     async function loadCaption() {
         if (!currentImageId || !captionText) return;
         try {
@@ -100,16 +132,33 @@ const { imageId } = Astro.props;
     async function handleGenerateCaption() {
         if (!currentImageId || !captionText) return;
         try {
+            // Add visual feedback and disable button
+            generateCaptionBtn?.classList.add('bg-purple-800', 'opacity-50', 'cursor-not-allowed');
+            generateCaptionBtn?.setAttribute('disabled', 'true');
+            
+            // Start the timer
+            startTimer();
+            
             const generatedCaption = await generateImageCaption(currentImageId);
             captionText.value = generatedCaption;
         } catch (error) {
             console.error('Error generating caption:', error);
+        } finally {
+            // Stop the timer
+            stopTimer();
+            
+            // Remove visual feedback and re-enable button
+            generateCaptionBtn?.classList.remove('bg-purple-800', 'opacity-50', 'cursor-not-allowed');
+            generateCaptionBtn?.removeAttribute('disabled');
         }
     }
 
     async function handleSaveCaption() {
         if (!currentImageId || !captionText) return;
         try {
+            // Add visual feedback
+            saveCaptionBtn?.classList.add('bg-green-800');
+            
             await saveImageCaption(currentImageId, captionText.value);
             updateCaptionStatus(captionText.value.length > 0);
             
@@ -119,9 +168,15 @@ const { imageId } = Astro.props;
                 imageElement.setAttribute('data-has-caption', captionText.value.length > 0 ? 'true' : 'false');
             }
             
-            captionModal?.classList.add('hidden');
+            // Wait for visual feedback before closing
+            setTimeout(() => {
+                saveCaptionBtn?.classList.remove('bg-green-800');
+                captionModal?.classList.add('hidden');
+            }, 200);
         } catch (error) {
             console.error('Error saving caption:', error);
+            // Remove visual feedback on error
+            saveCaptionBtn?.classList.remove('bg-green-800');
         }
     }
 
@@ -135,6 +190,8 @@ const { imageId } = Astro.props;
         closeCaptionModalBtn = document.getElementById('close-caption-modal');
         opacityValue = document.getElementById('opacity-value');
         boxOpacityValue = document.getElementById('box-opacity-value');
+        timerElement = document.getElementById('timer');
+        timerValue = document.getElementById('timer-value');
 
         // Close caption modal button handler
         closeCaptionModalBtn?.addEventListener('click', () => {
@@ -186,6 +243,18 @@ const { imageId } = Astro.props;
             // Don't handle shortcuts if we're typing in the textarea
             const activeElement = document.activeElement;
             if (activeElement?.id === 'caption-text') return;
+
+            // Handle g and s keys directly when textarea is not focused
+            switch (e.key.toLowerCase()) {
+                case 'g':
+                    e.preventDefault();
+                    handleGenerateCaption();
+                    return;
+                case 's':
+                    e.preventDefault();
+                    handleSaveCaption();
+                    return;
+            }
 
             // Check for Command key combinations
             if (e.metaKey) {
