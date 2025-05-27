@@ -8,12 +8,31 @@ interface GalleryReactProps {
   initialTotalPages: number;
 }
 
+// Create a global image cache
+const imageCache = new Map<string, HTMLImageElement>();
+
+// Function to preload an image
+const preloadImage = (imageId: string) => {
+  if (imageCache.has(imageId)) return;
+  
+  const img = new Image();
+  img.src = getImageUrl(imageId);
+  imageCache.set(imageId, img);
+};
+
 const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotalPages }) => {
   const [rows, setRows] = useState<Row[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [hasMorePages, setHasMorePages] = useState(true);
   const [totalPages, setTotalPages] = useState(initialTotalPages);
+
+  // Preload initial images
+  useEffect(() => {
+    initialImages.forEach(image => {
+      preloadImage(image.id);
+    });
+  }, [initialImages]);
 
   useEffect(() => {
     // Process initial images
@@ -43,11 +62,15 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
         setTotalPages(total_pages);
       }
 
+      // Preload new images
+      newImages.forEach(image => {
+        preloadImage(image.id);
+      });
+
       const newRows = processImages(newImages);
       setRows(prevRows => [...prevRows, ...newRows]);
       setCurrentPage(nextPage);
       
-      // Return true if we successfully loaded more images
       return true;
     } catch (error) {
       console.error('Error loading more images:', error);
@@ -57,11 +80,13 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
     }
   };
 
-  // Expose loadMoreImages to window
+  // Expose loadMoreImages and imageCache to window
   useEffect(() => {
     (window as any).loadMoreImages = loadMoreImages;
+    (window as any).imageCache = imageCache;
     return () => {
       delete (window as any).loadMoreImages;
+      delete (window as any).imageCache;
     };
   }, [loadMoreImages]);
 
