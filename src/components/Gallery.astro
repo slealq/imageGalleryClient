@@ -1,8 +1,8 @@
 ---
 import Image from "./Image.astro"
 import Modal from "./Modal.astro"
+import Drawer from "./Drawer.astro"
 import "../styles/global.css";
-import type { ImageData } from "../types/gallery";
 import { processImages } from "../utils/imageProcessing";
 
 // Initial fetch with pagination
@@ -19,6 +19,17 @@ const lastRowType = rows.length > 0 ? rows[rows.length - 1].type : null;
 ---
 
 <div class="container mx-auto px-1 space-y-2">
+    <!-- Add a button to open the drawer -->
+    <div class="flex justify-end mb-4">
+        <button
+            type="button"
+            class="rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            onclick="window.openDrawer()"
+        >
+            Open Drawer
+        </button>
+    </div>
+
     <div id="gallery-grid" class="flex flex-col gap-2">
         {
             rows.map((row) => (
@@ -55,6 +66,26 @@ const lastRowType = rows.length > 0 ? rows[rows.length - 1].type : null;
 </div>
 
 <Modal imageUrl="" />
+
+<!-- Add the Drawer component -->
+<Drawer title="Gallery Settings" isOpen={false}>
+    <div class="space-y-4">
+        <div>
+            <h3 class="text-lg font-medium text-gray-900">Display Settings</h3>
+            <p class="text-sm text-gray-500">Customize how your gallery is displayed.</p>
+        </div>
+        <div class="space-y-2">
+            <label class="flex items-center">
+                <input type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                <span class="ml-2 text-sm text-gray-600">Show image details</span>
+            </label>
+            <label class="flex items-center">
+                <input type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                <span class="ml-2 text-sm text-gray-600">Enable hover effects</span>
+            </label>
+        </div>
+    </div>
+</Drawer>
 
 <script is:inline>
 // Global variables to store pending images
