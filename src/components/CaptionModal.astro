@@ -49,8 +49,8 @@ const { imageId } = Astro.props;
     let currentImageId: string | null = null;
     let opacityValue: HTMLElement | null = null;
     let boxOpacityValue: HTMLElement | null = null;
-    let currentOpacity = 90;
-    let currentBoxOpacity = 90;
+    let currentOpacity = parseInt(localStorage.getItem('captionBackgroundOpacity') || '90');
+    let currentBoxOpacity = parseInt(localStorage.getItem('captionBoxOpacity') || '90');
 
     function updateOpacity(value: number) {
         currentOpacity = value;
@@ -60,6 +60,8 @@ const { imageId } = Astro.props;
         if (opacityValue) {
             opacityValue.textContent = value.toString();
         }
+        // Save to localStorage
+        localStorage.setItem('captionBackgroundOpacity', value.toString());
     }
 
     function updateBoxOpacity(value: number) {
@@ -70,6 +72,8 @@ const { imageId } = Astro.props;
         if (boxOpacityValue) {
             boxOpacityValue.textContent = value.toString();
         }
+        // Save to localStorage
+        localStorage.setItem('captionBoxOpacity', value.toString());
     }
 
     function updateCaptionStatus(hasCaption: boolean) {
@@ -164,6 +168,21 @@ const { imageId } = Astro.props;
                 return;
             }
 
+            // Allow left/right arrows to pass through for image navigation
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                return;
+            }
+
+            // Handle Enter key to focus textarea
+            if (e.key === 'Enter' && !document.activeElement?.id.includes('caption-text')) {
+                e.preventDefault();
+                if (captionText) {
+                    captionText.focus();
+                    captionText.select();
+                }
+                return;
+            }
+
             // Don't handle shortcuts if we're typing in the textarea
             const activeElement = document.activeElement;
             if (activeElement?.id === 'caption-text') return;
@@ -191,15 +210,12 @@ const { imageId } = Astro.props;
     (window as any).openCaptionModal = (imageId: string) => {
         currentImageId = imageId;
         captionModal?.classList.remove('hidden');
-        // Reset opacity to default
-        updateOpacity(90);
-        updateBoxOpacity(90);
+        // Apply saved opacity values
+        updateOpacity(currentOpacity);
+        updateBoxOpacity(currentBoxOpacity);
         // Clear the textarea before loading new caption
         if (captionText) {
             captionText.value = '';
-            // Focus the textarea and select all text
-            captionText.focus();
-            captionText.select();
         }
         loadCaption();
     };
