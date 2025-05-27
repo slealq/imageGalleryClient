@@ -1,6 +1,6 @@
 ---
 import GalleryReact from './GalleryReact';
-import Modal from './Modal.astro';
+import FullscreenModal from './FullscreenModal.astro';
 import Drawer from './Drawer.astro';
 import "../styles/global.css";
 import { processImages } from "../utils/imageProcessing";
@@ -17,7 +17,7 @@ const rows = processImages(imagesData);
   <GalleryReact client:load initialImages={imagesData} initialTotalPages={initialTotalPages} />
 </div>
 
-<Modal />
+<FullscreenModal />
 
 <Drawer title="Gallery Settings" isOpen={false}>
   <div class="space-y-4">
