@@ -108,10 +108,27 @@ const { imageId } = Astro.props;
         // Save caption button handler
         saveCaptionBtn?.addEventListener('click', handleSaveCaption);
 
-        // Add keyboard event handler for escape key
+        // Add keyboard shortcuts for caption operations
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && captionModal && !captionModal.classList.contains('hidden')) {
-                captionModal.classList.add('hidden');
+            // Only handle shortcuts if caption modal is open
+            if (captionModal?.classList.contains('hidden')) return;
+
+            // Don't handle shortcuts if we're typing in the textarea
+            const activeElement = document.activeElement;
+            if (activeElement?.id === 'caption-text') return;
+
+            // Check for Command key combinations
+            if (e.metaKey) {
+                switch (e.key.toLowerCase()) {
+                    case 'g':
+                        e.preventDefault(); // Prevent default browser behavior
+                        handleGenerateCaption();
+                        break;
+                    case 's':
+                        e.preventDefault(); // Prevent default browser behavior
+                        handleSaveCaption();
+                        break;
+                }
             }
         });
     });
@@ -123,6 +140,9 @@ const { imageId } = Astro.props;
         // Clear the textarea before loading new caption
         if (captionText) {
             captionText.value = '';
+            // Focus the textarea and select all text
+            captionText.focus();
+            captionText.select();
         }
         loadCaption();
     };

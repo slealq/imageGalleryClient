@@ -204,7 +204,28 @@ const { imageUrl } = Astro.props;
 
         // Add keyboard navigation
         document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                // Check if caption modal is open
+                const captionModal = document.getElementById('caption-modal');
+                if (captionModal && !captionModal.classList.contains('hidden')) {
+                    // Only close caption modal
+                    captionModal.classList.add('hidden');
+                    return;
+                }
+                
+                // If main modal is open, close it
+                if (modal && !modal.classList.contains('hidden')) {
+                    closeModal();
+                }
+                return;
+            }
+
+            // Only handle other keys if main modal is open
             if (modal?.classList.contains('hidden')) return;
+            
+            // Don't handle shortcuts if we're typing in the caption textarea
+            const activeElement = document.activeElement;
+            if (activeElement?.id === 'caption-text') return;
             
             switch (e.key) {
                 case 'ArrowLeft':
@@ -213,13 +234,10 @@ const { imageUrl } = Astro.props;
                 case 'ArrowRight':
                     navigateImage('next');
                     break;
-                case 'Escape':
-                    // Check if caption modal is open first
-                    const captionModal = document.getElementById('caption-modal');
-                    if (captionModal && !captionModal.classList.contains('hidden')) {
-                        captionModal.classList.add('hidden');
-                    } else {
-                        closeModal();
+                case 'c':
+                    // Open caption modal if main modal is open
+                    if (currentImageId) {
+                        (window as any).openCaptionModal(currentImageId);
                     }
                     break;
             }
