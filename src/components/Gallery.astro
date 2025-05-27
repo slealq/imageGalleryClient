@@ -324,6 +324,9 @@ window.processNewImages = function(newImages, lastRowType) {
         }
     }
 
+    // Expose loadMoreImages globally
+    window.loadMoreImages = loadMoreImages;
+
     // Intersection Observer for infinite scroll
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {

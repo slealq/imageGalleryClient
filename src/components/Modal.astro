@@ -8,7 +8,7 @@ const { imageUrl } = Astro.props;
 
 <div id="modal" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center">
     <div class="relative w-full h-full flex flex-col">
-        <div class="flex-1 flex items-center justify-center p-4 pb-20">
+        <div id="modal-background" class="flex-1 flex items-center justify-center p-4 pb-20">
             <img id="modal-image" src="" alt="" class="max-w-[95vw] max-h-[95vh] w-auto h-auto object-contain" />
         </div>
         <div id="modal-footer" class="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm p-4 text-white text-sm">
@@ -29,6 +29,9 @@ const { imageUrl } = Astro.props;
     let modalFilename: HTMLElement | null = null;
     let modalSize: HTMLElement | null = null;
     let modalDate: HTMLElement | null = null;
+    let imageContainers: HTMLElement[] = [];
+    let currentImageIndex = -1;
+    let isLoadingMore = false;
 
     function formatFileSize(bytes: number): string {
         if (bytes === 0) return '0 Bytes';
@@ -49,8 +52,58 @@ const { imageUrl } = Astro.props;
         });
     }
 
+    async function navigateImage(direction: 'next' | 'prev') {
+        if (currentImageIndex === -1) return;
+        
+        let newIndex = direction === 'next' 
+            ? Math.min(currentImageIndex + 1, imageContainers.length - 1)
+            : Math.max(currentImageIndex - 1, 0);
+            
+        if (newIndex !== currentImageIndex) {
+            currentImageIndex = newIndex;
+            const container = imageContainers[currentImageIndex];
+            const imageUrl = container.getAttribute('data-image-url');
+            const filename = container.getAttribute('data-filename');
+            const size = container.getAttribute('data-size');
+            const created = container.getAttribute('data-created');
+            
+            if (imageUrl && modalImage) modalImage.src = imageUrl;
+            if (filename && modalFilename) modalFilename.textContent = filename;
+            if (size && modalSize) modalSize.textContent = formatFileSize(parseInt(size));
+            if (created && modalDate) modalDate.textContent = formatDate(created);
+
+            // If we're at the last image and trying to go next, trigger loading more
+            if (direction === 'next' && currentImageIndex === imageContainers.length - 1 && !isLoadingMore) {
+                isLoadingMore = true;
+                try {
+                    // Call the global loadMoreImages function from Gallery
+                    if (window.loadMoreImages) {
+                        await window.loadMoreImages();
+                        // Update our containers list with newly loaded images
+                        imageContainers = Array.from(document.querySelectorAll('[data-image-url]')) as HTMLElement[];
+                        // If we successfully loaded more images, navigate to the next one
+                        if (currentImageIndex < imageContainers.length - 1) {
+                            navigateImage('next');
+                        }
+                    }
+                } finally {
+                    isLoadingMore = false;
+                }
+            }
+        }
+    }
+
     function openModal(imageUrl: string, filename: string, size: string, created: string) {
         if (!modal || !modalImage || !modalFilename || !modalSize || !modalDate) return;
+        
+        // Find the container that matches this image
+        const container = imageContainers.find(container => 
+            container.getAttribute('data-image-url') === imageUrl
+        );
+        
+        if (container) {
+            currentImageIndex = imageContainers.indexOf(container);
+        }
         
         modalImage.src = imageUrl;
         modalFilename.textContent = filename;
@@ -74,17 +127,32 @@ const { imageUrl } = Astro.props;
         modalSize = document.getElementById('modal-size');
         modalDate = document.getElementById('modal-date');
 
+        // Get all image containers
+        imageContainers = Array.from(document.querySelectorAll('[data-image-url]')) as HTMLElement[];
+
         // Close modal when clicking outside the image
+        
         modal?.addEventListener('click', (e) => {
-            if (e.target === modal) {
+            const target = e.target as HTMLElement;
+            if (target.id === 'modal-background') {
                 closeModal();
             }
         });
 
-        // Close modal when pressing Escape key
+        // Add keyboard navigation
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                closeModal();
+            if (modal?.classList.contains('hidden')) return;
+            
+            switch (e.key) {
+                case 'ArrowLeft':
+                    navigateImage('prev');
+                    break;
+                case 'ArrowRight':
+                    navigateImage('next');
+                    break;
+                case 'Escape':
+                    closeModal();
+                    break;
             }
         });
     });
