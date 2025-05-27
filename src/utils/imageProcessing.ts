@@ -1,4 +1,5 @@
 import type { ImageData, Row } from '../types/gallery';
+import Image from '../components/Image.astro';
 
 export function processImages(images: ImageData[]): Row[] {
     const landscapeImages = images.filter(img => (img.width / img.height) > 1);
@@ -54,14 +55,21 @@ export function createRowElement(type: 'landscape' | 'portrait', images: ImageDa
         const innerDiv = document.createElement('div');
         innerDiv.className = 'transition-all duration-300 ease-in-out group-hover:scale-110 group-hover:shadow-2xl';
 
+        const wrapperDiv = document.createElement('div');
+        wrapperDiv.className = 'group relative w-full h-full';
+
         const imgElement = document.createElement('img');
         imgElement.src = `http://127.0.0.1:8000/images/${img.id}`;
         imgElement.width = img.width * 0.5;
         imgElement.height = img.height * 0.5;
         imgElement.className = 'w-auto h-auto max-w-full max-h-full object-contain';
         imgElement.loading = 'lazy';
+        imgElement.setAttribute('data-filename', img.filename);
+        imgElement.setAttribute('data-size', img.size.toString());
+        imgElement.setAttribute('data-created', new Date(img.created_at).toISOString());
 
-        innerDiv.appendChild(imgElement);
+        wrapperDiv.appendChild(imgElement);
+        innerDiv.appendChild(wrapperDiv);
         imageDiv.appendChild(innerDiv);
         rowDiv.appendChild(imageDiv);
 
