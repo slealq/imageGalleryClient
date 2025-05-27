@@ -70,11 +70,17 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && !isLoading && hasMorePages) {
-          loadMoreImages();
+          // Calculate how many images we've shown so far
+          const totalImagesShown = rows.reduce((sum, row) => sum + row.images.length, 0);
+          // If we've shown more than 75% of the current page size (20), load more
+          if (totalImagesShown > 15) {
+            loadMoreImages();
+          }
         }
       },
       {
-        rootMargin: '200px',
+        // Start loading when we're 500px away from the trigger
+        rootMargin: '500px',
         threshold: 0.1
       }
     );
@@ -89,7 +95,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
         observer.unobserve(loadingTrigger);
       }
     };
-  }, [loadMoreImages, isLoading, hasMorePages]);
+  }, [loadMoreImages, isLoading, hasMorePages, rows]);
 
   const handleImageClick = (image: ImageData) => {
     if (window.openModal) {
