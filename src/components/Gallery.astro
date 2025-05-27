@@ -1,0 +1,45 @@
+---
+import Image from "./Image.astro"
+import Modal from "./Modal.astro"
+import "../styles/global.css";
+
+interface ImageData {
+    id: string;
+    width: number;
+    height: number;
+}
+
+const response = await fetch("http://127.0.0.1:8000/images")
+const jsonBody = await response.json();
+const imagesData: ImageData[] = jsonBody["images"];
+
+---
+
+<div class="container mx-auto px-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {
+            imagesData.map((img: ImageData) => (
+                <div 
+                    class="aspect-square cursor-pointer" 
+                    data-image-url={`http://127.0.0.1:8000/images/${img.id}`}
+                >
+                    <Image id={img.id} width={img.width} height={img.height} scale={0.2} />
+                </div>
+            ))
+        }
+    </div>
+</div>
+
+<Modal imageUrl="" />
+
+<script>
+    // Add click handlers to all image containers
+    document.querySelectorAll('[data-image-url]').forEach(container => {
+        container.addEventListener('click', () => {
+            const imageUrl = container.getAttribute('data-image-url');
+            if (imageUrl && window.openModal) {
+                window.openModal(imageUrl);
+            }
+        });
+    });
+</script>

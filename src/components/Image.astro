@@ -1,0 +1,31 @@
+---
+import "../styles/global.css";
+
+// const image_data = Astro.props;
+
+//const response = await fetch("http://0.0.0.0:8000/images/1632_030");
+//const data = await response.blob();
+
+//const imgSrc = "http://0.0.0.0:8000/images/1632_030";
+
+interface Props {
+  id: string;
+  width: number;
+  height: number;
+  scale: number;
+}
+
+const { id, width, height, scale } = Astro.props
+
+const url = "http://127.0.0.1:8000/images/" + id
+---
+
+<div class="group relative w-full h-full">
+  <img 
+    src={url} 
+    width={width * scale} 
+    height={height * scale} 
+    class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+    loading="lazy"
+  />
+</div>

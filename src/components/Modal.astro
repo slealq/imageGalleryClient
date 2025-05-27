@@ -1,0 +1,76 @@
+---
+interface Props {
+    imageUrl: string;
+}
+
+const { imageUrl } = Astro.props;
+---
+
+<div 
+    id="modal"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 transition-opacity duration-300 opacity-0 pointer-events-none"
+>
+    <div class="relative w-full h-full flex items-center justify-center p-4">
+        <img 
+            id="modalImage"
+            src={imageUrl} 
+            class="max-w-full max-h-full object-contain"
+            alt="Full size image"
+        />
+        <button 
+            class="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors"
+            id="closeModal"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+    </div>
+</div>
+
+<script>
+    // Declare global functions
+    declare global {
+        interface Window {
+            openModal: (imageUrl: string) => void;
+            closeModal: () => void;
+        }
+    }
+
+    // Function to open modal
+    window.openModal = function(imageUrl: string) {
+        const modal = document.getElementById('modal');
+        const modalImage = document.getElementById('modalImage') as HTMLImageElement;
+        if (modal && modalImage) {
+            modalImage.src = imageUrl;
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+        }
+    };
+
+    // Function to close modal
+    window.closeModal = function() {
+        const modal = document.getElementById('modal');
+        if (modal) {
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        }
+    };
+
+    // Close button click handler
+    document.getElementById('closeModal')?.addEventListener('click', () => {
+        window.closeModal();
+    });
+
+    // Close on escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            window.closeModal();
+        }
+    });
+
+    // Close on click outside image
+    document.getElementById('modal')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) {
+            window.closeModal();
+        }
+    });
+</script> 
