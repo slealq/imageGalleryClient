@@ -207,17 +207,27 @@ const { imageUrl } = Astro.props;
             if (e.key === 'Escape') {
                 // Check if caption modal is open
                 const captionModal = document.getElementById('caption-modal');
+                const captionText = document.getElementById('caption-text');
+                
                 if (captionModal && !captionModal.classList.contains('hidden')) {
-                    // Only close caption modal
+                    // If textarea is focused, just blur it
+                    if (document.activeElement?.id === 'caption-text') {
+                        captionText?.blur();
+                        e.preventDefault();
+                        return;
+                    }
+                    // Otherwise close caption modal
                     captionModal.classList.add('hidden');
+                    e.preventDefault();
                     return;
                 }
                 
                 // If main modal is open, close it
                 if (modal && !modal.classList.contains('hidden')) {
                     closeModal();
+                    e.preventDefault();
+                    return;
                 }
-                return;
             }
 
             // Only handle other keys if main modal is open
