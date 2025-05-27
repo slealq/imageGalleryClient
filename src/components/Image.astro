@@ -13,9 +13,12 @@ interface Props {
   width: number;
   height: number;
   scale: number;
+  filename: string;
+  size: number;
+  created_at: Date;
 }
 
-const { id, width, height, scale } = Astro.props
+const { id, width, height, scale, filename, size, created_at } = Astro.props
 
 const url = "http://127.0.0.1:8000/images/" + id
 ---
@@ -25,7 +28,10 @@ const url = "http://127.0.0.1:8000/images/" + id
     src={url} 
     width={width * scale} 
     height={height * scale} 
-    class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+    class="w-auto h-auto max-w-full max-h-full object-contain"
     loading="lazy"
+    data-filename={filename}
+    data-size={size}
+    data-created={created_at.toISOString()}
   />
 </div>

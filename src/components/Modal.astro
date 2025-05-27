@@ -6,72 +6,89 @@ interface Props {
 const { imageUrl } = Astro.props;
 ---
 
-<div 
-    id="modal"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 transition-opacity duration-300 opacity-0 pointer-events-none"
->
-    <div id="background" class="relative w-full h-full flex items-center justify-center p-4">
-        <img 
-            id="modalImage"
-            src={imageUrl} 
-            class="max-w-full max-h-full object-contain"
-            alt="Full size image"
-        />
-        <button 
-            class="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors"
-            id="closeModal"
-        >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-        </button>
+<div id="modal" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center">
+    <div class="relative w-full h-full flex flex-col">
+        <div class="flex-1 flex items-center justify-center p-4 pb-20">
+            <img id="modal-image" src="" alt="" class="max-w-[95vw] max-h-[95vh] w-auto h-auto object-contain" />
+        </div>
+        <div id="modal-footer" class="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm p-4 text-white text-sm">
+            <div class="container mx-auto flex justify-between items-center">
+                <div id="modal-filename" class="font-medium"></div>
+                <div class="flex gap-4">
+                    <div id="modal-size" class="text-gray-300"></div>
+                    <div id="modal-date" class="text-gray-300"></div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
-    // Declare global functions
-    declare global {
-        interface Window {
-            openModal: (imageUrl: string) => void;
-            closeModal: () => void;
-        }
+    let modal: HTMLElement | null = null;
+    let modalImage: HTMLImageElement | null = null;
+    let modalFilename: HTMLElement | null = null;
+    let modalSize: HTMLElement | null = null;
+    let modalDate: HTMLElement | null = null;
+
+    function formatFileSize(bytes: number): string {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    // Function to open modal
-    window.openModal = function(imageUrl: string) {
-        const modal = document.getElementById('modal');
-        const modalImage = document.getElementById('modalImage') as HTMLImageElement;
-        if (modal && modalImage) {
-            modalImage.src = imageUrl;
-            modal.classList.remove('opacity-0', 'pointer-events-none');
-        }
-    };
+    function formatDate(dateString: string): string {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
 
-    // Function to close modal
-    window.closeModal = function() {
-        const modal = document.getElementById('modal');
-        if (modal) {
-            modal.classList.add('opacity-0', 'pointer-events-none');
-        }
-    };
+    function openModal(imageUrl: string, filename: string, size: string, created: string) {
+        if (!modal || !modalImage || !modalFilename || !modalSize || !modalDate) return;
+        
+        modalImage.src = imageUrl;
+        modalFilename.textContent = filename;
+        modalSize.textContent = formatFileSize(parseInt(size));
+        modalDate.textContent = formatDate(created);
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
 
-    // Close button click handler
-    document.getElementById('closeModal')?.addEventListener('click', () => {
-        window.closeModal();
+    function closeModal() {
+        if (!modal) return;
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    // Initialize modal elements
+    document.addEventListener('DOMContentLoaded', () => {
+        modal = document.getElementById('modal');
+        modalImage = document.getElementById('modal-image') as HTMLImageElement;
+        modalFilename = document.getElementById('modal-filename');
+        modalSize = document.getElementById('modal-size');
+        modalDate = document.getElementById('modal-date');
+
+        // Close modal when clicking outside the image
+        modal?.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+
+        // Close modal when pressing Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
     });
 
-    // Close on escape key
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            window.closeModal();
-        }
-    });
-
-    // Close on click outside image
-    document.getElementById('modal')?.addEventListener('click', (e) => {
-        const target = e.target as HTMLElement;
-        if (target.id === 'background') {
-            window.closeModal();
-        }
-    });
+    // Make openModal available globally
+    (window as any).openModal = openModal;
 </script> 

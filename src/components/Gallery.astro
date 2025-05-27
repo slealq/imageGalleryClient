@@ -3,8 +3,12 @@ import Image from "./Image.astro"
 import Modal from "./Modal.astro"
 import "../styles/global.css";
 
+
 interface ImageData {
     id: string;
+    filename: string;
+    size: number;
+    created_at: string;
     width: number;
     height: number;
 }
@@ -13,32 +17,91 @@ const response = await fetch("http://127.0.0.1:8000/images")
 const jsonBody = await response.json();
 const imagesData: ImageData[] = jsonBody["images"];
 
+// Separate images into landscape and portrait
+const landscapeImages = imagesData.filter(img => (img.width / img.height) > 1);
+const portraitImages = imagesData.filter(img => (img.width / img.height) <= 1);
+
 ---
 
-<div class="container mx-auto px-4">
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {
-            imagesData.map((img: ImageData) => (
-                <div 
-                    class="aspect-square cursor-pointer" 
-                    data-image-url={`http://127.0.0.1:8000/images/${img.id}`}
-                >
-                    <Image id={img.id} width={img.width} height={img.height} scale={0.2} />
-                </div>
-            ))
-        }
+<div class="container mx-auto px-1 space-y-2">
+    <!-- Landscape Images Section -->
+    <div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-1">
+            {
+                landscapeImages.map((img: ImageData) => (
+                    <div 
+                        class="cursor-pointer overflow-hidden flex items-center justify-center bg-black/20 backdrop-blur-sm p-1 group rounded-sm"
+                        data-image-url={`http://127.0.0.1:8000/images/${img.id}`}
+                        data-filename={img.filename}
+                        data-size={img.size}
+                        data-created={img.created_at}
+                    >
+                        <div class="transition-all duration-300 ease-in-out group-hover:scale-110 group-hover:shadow-2xl">
+                            <Image 
+                                id={img.id} 
+                                width={img.width} 
+                                height={img.height} 
+                                scale={0.5}
+                                filename={img.filename}
+                                size={img.size}
+                                created_at={new Date(img.created_at)}
+                            />
+                        </div>
+                    </div>
+                ))
+            }
+        </div>
+    </div>
+
+    <!-- Portrait Images Section -->
+    <div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-1">
+            {
+                portraitImages.map((img: ImageData) => (
+                    <div 
+                        class="cursor-pointer overflow-hidden flex items-center justify-center bg-black/20 backdrop-blur-sm p-1 group rounded-sm"
+                        data-image-url={`http://127.0.0.1:8000/images/${img.id}`}
+                        data-filename={img.filename}
+                        data-size={img.size}
+                        data-created={img.created_at}
+                    >
+                        <div class="transition-all duration-300 ease-in-out group-hover:scale-110 group-hover:shadow-2xl">
+                            <Image 
+                                id={img.id} 
+                                width={img.width} 
+                                height={img.height} 
+                                scale={0.5}
+                                filename={img.filename}
+                                size={img.size}
+                                created_at={new Date(img.created_at)}
+                            />
+                        </div>
+                    </div>
+                ))
+            }
+        </div>
     </div>
 </div>
 
 <Modal imageUrl="" />
 
 <script>
+    // Declare global function type
+    declare global {
+        interface Window {
+            openModal: (imageUrl: string, filename: string, size: string, created: string) => void;
+        }
+    }
+
     // Add click handlers to all image containers
     document.querySelectorAll('[data-image-url]').forEach(container => {
         container.addEventListener('click', () => {
             const imageUrl = container.getAttribute('data-image-url');
-            if (imageUrl && window.openModal) {
-                window.openModal(imageUrl);
+            const filename = container.getAttribute('data-filename');
+            const size = container.getAttribute('data-size');
+            const created = container.getAttribute('data-created');
+            if (imageUrl && filename && size && created && window.openModal) {
+                window.openModal(imageUrl, filename, size, created);
             }
         });
     });
