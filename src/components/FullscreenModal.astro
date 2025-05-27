@@ -76,6 +76,27 @@ const { imageUrl } = Astro.props;
             ? Math.min(currentImageIndex + 1, imageElements.length - 1)
             : Math.max(currentImageIndex - 1, 0);
             
+        // If we're at the last image and trying to go next, trigger loading more
+        if (direction === 'next' && currentImageIndex === imageElements.length - 1 && !isLoadingMore) {
+            isLoadingMore = true;
+            try {
+                // Call the global loadMoreImages function from Gallery
+                if (window.loadMoreImages) {
+                    const success = await window.loadMoreImages();
+                    if (success) {
+                        // Update our elements list with newly loaded images
+                        imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
+                        // If we successfully loaded more images, navigate to the next one
+                        if (currentImageIndex < imageElements.length - 1) {
+                            newIndex = currentImageIndex + 1;
+                        }
+                    }
+                }
+            } finally {
+                isLoadingMore = false;
+            }
+        }
+            
         if (newIndex !== currentImageIndex) {
             currentImageIndex = newIndex;
             const img = imageElements[currentImageIndex];
@@ -106,25 +127,6 @@ const { imageUrl } = Astro.props;
             const captionModal = document.getElementById('caption-modal');
             if (captionModal && !captionModal.classList.contains('hidden') && imageId) {
                 (window as any).openCaptionModal(imageId);
-            }
-
-            // If we're at the last image and trying to go next, trigger loading more
-            if (direction === 'next' && currentImageIndex === imageElements.length - 1 && !isLoadingMore) {
-                isLoadingMore = true;
-                try {
-                    // Call the global loadMoreImages function from Gallery
-                    if (window.loadMoreImages) {
-                        await window.loadMoreImages();
-                        // Update our elements list with newly loaded images
-                        imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
-                        // If we successfully loaded more images, navigate to the next one
-                        if (currentImageIndex < imageElements.length - 1) {
-                            navigateImage('next');
-                        }
-                    }
-                } finally {
-                    isLoadingMore = false;
-                }
             }
         }
     }

@@ -12,6 +12,6 @@ interface Window {
         collectionName: string
     ) => void;
     openDrawer?: () => void;
-    loadMoreImages?: () => Promise<void>;
+    loadMoreImages?: () => Promise<boolean>;
     openCaptionModal?: (imageId: string) => void;
 } 

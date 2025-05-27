@@ -46,12 +46,24 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
       const newRows = processImages(newImages);
       setRows(prevRows => [...prevRows, ...newRows]);
       setCurrentPage(nextPage);
+      
+      // Return true if we successfully loaded more images
+      return true;
     } catch (error) {
       console.error('Error loading more images:', error);
+      return false;
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Expose loadMoreImages to window
+  useEffect(() => {
+    (window as any).loadMoreImages = loadMoreImages;
+    return () => {
+      delete (window as any).loadMoreImages;
+    };
+  }, [loadMoreImages]);
 
   // Intersection Observer setup
   useEffect(() => {
