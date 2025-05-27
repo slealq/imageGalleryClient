@@ -1,0 +1,235 @@
+---
+interface Props {
+    imageId: string;
+}
+
+const { imageId } = Astro.props;
+---
+
+<!-- Crop Modal -->
+<div id="crop-modal" class="fixed inset-0 bg-black/90 hidden z-[70] flex items-center justify-center">
+    <div class="bg-gray-900/90 rounded-lg p-6 w-full h-full flex flex-col">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold text-white">Crop Image</h2>
+            <div class="flex items-center gap-4">
+                <div class="flex gap-2">
+                    <button id="crop-original" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm text-white">
+                        Original
+                    </button>
+                    <button id="crop-512" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white">
+                        512x512
+                    </button>
+                    <button id="crop-768" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white">
+                        768x768
+                    </button>
+                    <button id="crop-1024" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white">
+                        1024x1024
+                    </button>
+                </div>
+                <button id="close-crop-modal" class="text-gray-400 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+        
+        <div class="flex-1 relative bg-gray-800 rounded-lg overflow-hidden">
+            <img id="crop-preview" src="" alt="" class="w-full h-full object-contain" />
+            <div id="crop-overlay" class="absolute inset-0 pointer-events-none">
+                <div id="crop-box" class="absolute border-2 border-red-500 bg-red-500/20 hidden"></div>
+            </div>
+        </div>
+
+        <div class="mt-4 flex justify-end gap-3">
+            <button id="cancel-crop" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium text-white">
+                Cancel
+            </button>
+            <button id="apply-crop" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium text-white">
+                Apply Crop
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    import { getImageUrl, getImagePreviewUrl, cropImage } from '../utils/api';
+
+    let cropModal: HTMLElement | null = null;
+    let cropPreview: HTMLImageElement | null = null;
+    let cropBox: HTMLElement | null = null;
+    let cropOverlay: HTMLElement | null = null;
+    let currentImageId: string | null = null;
+    let selectedRatio: number | null = null;
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let cropBoxLeft = 0;
+    let cropBoxTop = 0;
+
+    function updateButtonStyles(selectedButton: HTMLElement) {
+        // Reset all buttons to default style
+        document.querySelectorAll('#crop-original, #crop-512, #crop-768, #crop-1024').forEach(button => {
+            button.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+            button.classList.add('bg-gray-700', 'hover:bg-gray-600');
+        });
+        
+        // Set selected button style
+        selectedButton.classList.remove('bg-gray-700', 'hover:bg-gray-600');
+        selectedButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
+    }
+
+    function initializeCropBox() {
+        if (!cropBox || !cropOverlay) return;
+        
+        const overlayRect = cropOverlay.getBoundingClientRect();
+        const size = Math.min(overlayRect.width, overlayRect.height) * 0.8;
+        
+        cropBox.style.width = `${size}px`;
+        cropBox.style.height = `${size}px`;
+        cropBox.style.left = `${(overlayRect.width - size) / 2}px`;
+        cropBox.style.top = `${(overlayRect.height - size) / 2}px`;
+        cropBox.classList.remove('hidden');
+    }
+
+    function handleMouseDown(e: MouseEvent) {
+        if (!cropBox) return;
+        
+        const rect = cropBox.getBoundingClientRect();
+        if (e.clientX >= rect.left && e.clientX <= rect.right &&
+            e.clientY >= rect.top && e.clientY <= rect.bottom) {
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            cropBoxLeft = rect.left;
+            cropBoxTop = rect.top;
+        }
+    }
+
+    function handleMouseMove(e: MouseEvent) {
+        if (!isDragging || !cropBox || !cropOverlay) return;
+        
+        const overlayRect = cropOverlay.getBoundingClientRect();
+        const deltaX = e.clientX - startX;
+        const deltaY = e.clientY - startY;
+        
+        let newLeft = cropBoxLeft + deltaX;
+        let newTop = cropBoxTop + deltaY;
+        
+        // Constrain to overlay bounds
+        newLeft = Math.max(0, Math.min(newLeft, overlayRect.width - cropBox.offsetWidth));
+        newTop = Math.max(0, Math.min(newTop, overlayRect.height - cropBox.offsetHeight));
+        
+        cropBox.style.left = `${newLeft}px`;
+        cropBox.style.top = `${newTop}px`;
+    }
+
+    function handleMouseUp() {
+        isDragging = false;
+    }
+
+    async function applyCrop() {
+        if (!currentImageId || !cropBox) return;
+        
+        try {
+            const blob = await cropImage(
+                currentImageId,
+                selectedRatio || 512, // Default to 512 if original size
+                {
+                    x: parseInt(cropBox.style.left),
+                    y: parseInt(cropBox.style.top),
+                    width: parseInt(cropBox.style.width),
+                    height: parseInt(cropBox.style.height)
+                }
+            );
+            
+            const url = URL.createObjectURL(blob);
+            
+            // Update the fullscreen modal image
+            const fullscreenImage = document.getElementById('modal-image') as HTMLImageElement;
+            if (fullscreenImage) {
+                fullscreenImage.src = url;
+            }
+
+            // Update the has_crop property on the image element
+            const imageElement = document.querySelector(`img[data-id="${currentImageId}"]`);
+            if (imageElement) {
+                imageElement.setAttribute('data-has-crop', 'true');
+            }
+            
+            // Close the crop modal
+            cropModal?.classList.add('hidden');
+        } catch (error) {
+            console.error('Error applying crop:', error);
+            // TODO: Show error message to user
+        }
+    }
+
+    function updateRatio(size: number | null, button: HTMLElement) {
+        selectedRatio = size;
+        if (currentImageId && cropPreview) {
+            if (size === null) {
+                // Use original image
+                cropPreview.src = getImageUrl(currentImageId);
+            } else {
+                // Use preview with specified size
+                cropPreview.src = getImagePreviewUrl(currentImageId, size);
+            }
+        }
+        updateButtonStyles(button);
+        initializeCropBox();
+    }
+
+    // Initialize modal elements
+    document.addEventListener('DOMContentLoaded', () => {
+        cropModal = document.getElementById('crop-modal');
+        cropPreview = document.getElementById('crop-preview') as HTMLImageElement;
+        cropBox = document.getElementById('crop-box');
+        cropOverlay = document.getElementById('crop-overlay');
+
+        // Close button handler
+        document.getElementById('close-crop-modal')?.addEventListener('click', () => {
+            cropModal?.classList.add('hidden');
+        });
+
+        // Cancel button handler
+        document.getElementById('cancel-crop')?.addEventListener('click', () => {
+            cropModal?.classList.add('hidden');
+        });
+
+        // Apply crop button handler
+        document.getElementById('apply-crop')?.addEventListener('click', applyCrop);
+
+        // Ratio selection buttons
+        const originalButton = document.getElementById('crop-original');
+        const button512 = document.getElementById('crop-512');
+        const button768 = document.getElementById('crop-768');
+        const button1024 = document.getElementById('crop-1024');
+
+        originalButton?.addEventListener('click', () => updateRatio(null, originalButton!));
+        button512?.addEventListener('click', () => updateRatio(512, button512!));
+        button768?.addEventListener('click', () => updateRatio(768, button768!));
+        button1024?.addEventListener('click', () => updateRatio(1024, button1024!));
+
+        // Mouse event handlers for crop box
+        cropOverlay?.addEventListener('mousedown', handleMouseDown);
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+    });
+
+    // Make openCropModal available globally
+    (window as any).openCropModal = (imageId: string) => {
+        currentImageId = imageId;
+        if (cropPreview) {
+            // Start with original size
+            cropPreview.src = getImageUrl(imageId);
+            selectedRatio = null;
+            const originalButton = document.getElementById('crop-original');
+            if (originalButton) {
+                updateButtonStyles(originalButton);
+            }
+        }
+        cropModal?.classList.remove('hidden');
+        initializeCropBox();
+    };
+</script> 

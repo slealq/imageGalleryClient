@@ -14,4 +14,5 @@ interface Window {
     openDrawer?: () => void;
     loadMoreImages?: () => Promise<boolean>;
     openCaptionModal?: (imageId: string) => void;
+    openCropModal?: (imageId: string) => void;
 } 

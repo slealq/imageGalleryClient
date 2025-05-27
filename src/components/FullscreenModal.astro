@@ -1,5 +1,6 @@
 ---
 import CaptionModal from './CaptionModal.astro';
+import CropModal from './CropModal.astro';
 
 interface Props {
     imageUrl?: string;
@@ -27,8 +28,16 @@ const { imageUrl } = Astro.props;
                         <span class="w-2 h-2 rounded-full"></span>
                         <span class="text-sm">Caption Status</span>
                     </div>
-                    <button id="caption-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors">
+                    <button id="caption-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors cursor-pointer">
                         Manage Caption
+                    </button>
+
+                    <div id="crop-status" class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full"></span>
+                        <span class="text-sm">Crop Status</span>
+                    </div>
+                    <button id="crop-button" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm font-medium transition-colors cursor-pointer">
+                        Crop Image
                     </button>
                 </div>
             </div>
@@ -37,6 +46,7 @@ const { imageUrl } = Astro.props;
 </div>
 
 <CaptionModal imageId="" />
+<CropModal imageId="" />
 
 <script>
     let modal: HTMLElement | null = null;
@@ -107,6 +117,7 @@ const { imageUrl } = Astro.props;
             const imageId = img.getAttribute('data-id');
             const hasCaption = img.getAttribute('data-has-caption') === 'true';
             const hasTags = img.getAttribute('data-has-tags') === 'true';
+            const hasCrop = img.getAttribute('data-has-crop') === 'true';
             const collectionName = img.getAttribute('data-collection');
             
             if (imageUrl && modalImage) modalImage.src = imageUrl;
@@ -121,6 +132,14 @@ const { imageUrl } = Astro.props;
             if (statusDot && statusText) {
                 statusDot.className = `w-2 h-2 rounded-full ${hasCaption ? 'bg-green-500' : 'bg-red-500'}`;
                 statusText.textContent = hasCaption ? 'Has Caption' : 'No Caption';
+            }
+
+            // Update crop status
+            const cropStatusDot = document.querySelector('#crop-status .w-2');
+            const cropStatusText = document.querySelector('#crop-status span:last-child');
+            if (cropStatusDot && cropStatusText) {
+                cropStatusDot.className = `w-2 h-2 rounded-full ${hasCrop ? 'bg-green-500' : 'bg-red-500'}`;
+                cropStatusText.textContent = hasCrop ? 'Has Crop' : 'No Crop';
             }
 
             // If caption modal is open, update it with the new image's caption
@@ -168,6 +187,15 @@ const { imageUrl } = Astro.props;
         if (statusDot && statusText) {
             statusDot.className = `w-2 h-2 rounded-full ${hasCaption ? 'bg-green-500' : 'bg-red-500'}`;
             statusText.textContent = hasCaption ? 'Has Caption' : 'No Caption';
+        }
+
+        // Update crop status
+        const hasCrop = img?.getAttribute('data-has-crop') === 'true';
+        const cropStatusDot = document.querySelector('#crop-status .w-2');
+        const cropStatusText = document.querySelector('#crop-status span:last-child');
+        if (cropStatusDot && cropStatusText) {
+            cropStatusDot.className = `w-2 h-2 rounded-full ${hasCrop ? 'bg-green-500' : 'bg-red-500'}`;
+            cropStatusText.textContent = hasCrop ? 'Has Crop' : 'No Crop';
         }
     }
 
@@ -252,6 +280,20 @@ const { imageUrl } = Astro.props;
                         (window as any).openCaptionModal(currentImageId);
                     }
                     break;
+                case 'r':
+                    // Open crop modal if main modal is open
+                    if (currentImageId) {
+                        (window as any).openCropModal(currentImageId);
+                    }
+                    break;
+            }
+        });
+
+        // Add crop button handler
+        const cropButton = document.getElementById('crop-button');
+        cropButton?.addEventListener('click', () => {
+            if (currentImageId) {
+                (window as any).openCropModal(currentImageId);
             }
         });
     });

@@ -10,6 +10,7 @@ export interface ImageData {
     has_caption: boolean;
     collection_name: string;
     has_tags: boolean;
+    has_crop: boolean;
 }
 
 export interface ImagesResponse {
@@ -22,6 +23,19 @@ export interface ImagesResponse {
 
 export interface CaptionResponse {
     caption: string;
+}
+
+export interface CropBox {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
+export interface CropRequest {
+    imageId: string;
+    targetSize: number;
+    cropBox: CropBox;
 }
 
 export async function fetchImages(page: number = 1, pageSize: number = 20): Promise<ImagesResponse> {
@@ -70,4 +84,28 @@ export async function generateImageCaption(imageId: string): Promise<string> {
     }
     const data: CaptionResponse = await response.json();
     return data.caption;
+}
+
+export function getImagePreviewUrl(imageId: string, targetSize: number): string {
+    return `${API_BASE_URL}/images/${imageId}/preview/${targetSize}`;
+}
+
+export async function cropImage(imageId: string, targetSize: number, cropBox: CropBox): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/images/${imageId}/crop`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            imageId,
+            targetSize,
+            cropBox
+        }),
+    });
+    
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return response.blob();
 } 
