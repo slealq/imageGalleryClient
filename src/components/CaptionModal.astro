@@ -7,15 +7,21 @@ const { imageId } = Astro.props;
 ---
 
 <!-- Caption Modal - Appears on top of the FullscreenModal -->
-<div id="caption-modal" class="fixed inset-0 bg-black/90 hidden z-[60] flex items-center justify-center">
-    <div class="bg-gray-900 rounded-lg p-6 w-full max-w-2xl mx-4">
+<div id="caption-modal" class="fixed inset-0 bg-black/90 hidden z-[60] flex items-center justify-center transition-opacity duration-200">
+    <div id="caption-box" class="bg-gray-900/90 rounded-lg p-6 w-full max-w-2xl mx-4 transition-opacity duration-200">
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-xl font-semibold text-white">Image Caption</h2>
-            <button id="close-caption-modal" class="text-gray-400 hover:text-white">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-            </button>
+            <div class="flex items-center gap-4">
+                <div class="text-sm text-gray-400">
+                    Background: <span id="opacity-value">90</span>%<br>
+                    Box: <span id="box-opacity-value">90</span>%
+                </div>
+                <button id="close-caption-modal" class="text-gray-400 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
         </div>
         <div class="space-y-4">
             <textarea id="caption-text" class="w-full h-32 bg-gray-800 text-white rounded-lg p-3 resize-none focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Enter caption..."></textarea>
@@ -35,11 +41,36 @@ const { imageId } = Astro.props;
     import { getImageCaption, saveImageCaption, generateImageCaption } from '../utils/api';
 
     let captionModal: HTMLElement | null = null;
+    let captionBox: HTMLElement | null = null;
     let captionText: HTMLTextAreaElement | null = null;
     let generateCaptionBtn: HTMLElement | null = null;
     let saveCaptionBtn: HTMLElement | null = null;
     let closeCaptionModalBtn: HTMLElement | null = null;
     let currentImageId: string | null = null;
+    let opacityValue: HTMLElement | null = null;
+    let boxOpacityValue: HTMLElement | null = null;
+    let currentOpacity = 90;
+    let currentBoxOpacity = 90;
+
+    function updateOpacity(value: number) {
+        currentOpacity = value;
+        if (captionModal) {
+            captionModal.style.backgroundColor = `rgba(0, 0, 0, ${value / 100})`;
+        }
+        if (opacityValue) {
+            opacityValue.textContent = value.toString();
+        }
+    }
+
+    function updateBoxOpacity(value: number) {
+        currentBoxOpacity = value;
+        if (captionBox) {
+            captionBox.style.backgroundColor = `rgba(17, 24, 39, ${value / 100})`; // gray-900 with opacity
+        }
+        if (boxOpacityValue) {
+            boxOpacityValue.textContent = value.toString();
+        }
+    }
 
     function updateCaptionStatus(hasCaption: boolean) {
         const statusDot = document.querySelector('#caption-status .w-2');
@@ -93,10 +124,13 @@ const { imageId } = Astro.props;
     // Initialize modal elements
     document.addEventListener('DOMContentLoaded', () => {
         captionModal = document.getElementById('caption-modal');
+        captionBox = document.getElementById('caption-box');
         captionText = document.getElementById('caption-text') as HTMLTextAreaElement;
         generateCaptionBtn = document.getElementById('generate-caption');
         saveCaptionBtn = document.getElementById('save-caption');
         closeCaptionModalBtn = document.getElementById('close-caption-modal');
+        opacityValue = document.getElementById('opacity-value');
+        boxOpacityValue = document.getElementById('box-opacity-value');
 
         // Close caption modal button handler
         closeCaptionModalBtn?.addEventListener('click', () => {
@@ -114,6 +148,22 @@ const { imageId } = Astro.props;
             // Only handle shortcuts if caption modal is open
             if (captionModal?.classList.contains('hidden')) return;
 
+            // Handle arrow keys for box opacity control
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                const change = e.key === 'ArrowUp' ? 5 : -5;
+                if (e.metaKey) {
+                    // Command + Arrow controls background opacity
+                    const newOpacity = Math.min(Math.max(currentOpacity + change, 20), 100);
+                    updateOpacity(newOpacity);
+                } else {
+                    // Arrow keys control box opacity
+                    const newBoxOpacity = Math.min(Math.max(currentBoxOpacity + change, 20), 100);
+                    updateBoxOpacity(newBoxOpacity);
+                }
+                return;
+            }
+
             // Don't handle shortcuts if we're typing in the textarea
             const activeElement = document.activeElement;
             if (activeElement?.id === 'caption-text') return;
@@ -130,6 +180,9 @@ const { imageId } = Astro.props;
                         handleSaveCaption();
                         break;
                 }
+            } else {
+                // Block all other key events when caption modal is open
+                e.preventDefault();
             }
         });
     });
@@ -138,6 +191,9 @@ const { imageId } = Astro.props;
     (window as any).openCaptionModal = (imageId: string) => {
         currentImageId = imageId;
         captionModal?.classList.remove('hidden');
+        // Reset opacity to default
+        updateOpacity(90);
+        updateBoxOpacity(90);
         // Clear the textarea before loading new caption
         if (captionText) {
             captionText.value = '';
