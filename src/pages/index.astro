@@ -1,12 +1,62 @@
 ---
-import Gallery from '../components/Gallery.astro';
-import Welcome from '../components/Welcome.astro';
+import GalleryReact from '../components/GalleryReact';
 import Layout from '../layouts/Layout.astro';
 
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+// Initial fetch with pagination
+const response = await fetch("http://127.0.0.1:8000/images?page=1&page_size=20");
+const jsonBody = await response.json();
+const imagesData = jsonBody["images"];
+const initialTotalPages = jsonBody["total_pages"] || 1;
 ---
 
 <Layout>
-	<Gallery />
+	<GalleryReact client:load initialImages={imagesData} initialTotalPages={initialTotalPages} />
 </Layout>
+
+<dialog id="modal">
+	<!-- Modal content will be dynamically updated -->
+</dialog>
+
+<dialog id="drawer" data-drawer>
+	<div class="p-4">
+		<h2 class="text-xl font-bold mb-4">Gallery Settings</h2>
+		<div class="space-y-4">
+			<div>
+				<h3 class="text-lg font-medium text-gray-900">Display Settings</h3>
+				<p class="text-sm text-gray-500">Customize how your gallery is displayed.</p>
+			</div>
+			<div class="space-y-2">
+				<label class="flex items-center">
+					<input type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+					<span class="ml-2 text-sm text-gray-600">Show image details</span>
+				</label>
+				<label class="flex items-center">
+					<input type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+					<span class="ml-2 text-sm text-gray-600">Enable hover effects</span>
+				</label>
+			</div>
+		</div>
+	</div>
+</dialog>
+
+<script>
+	// Global function for opening modal
+	window.openModal = function(imageUrl, filename, size, created) {
+		const modal = document.querySelector('dialog#modal') as HTMLDialogElement;
+		if (modal) {
+			modal.setAttribute('data-image-url', imageUrl);
+			modal.setAttribute('data-filename', filename);
+			modal.setAttribute('data-size', size);
+			modal.setAttribute('data-created', created);
+			modal.showModal();
+		}
+	};
+
+	// Global function for opening drawer
+	window.openDrawer = function() {
+		const drawer = document.querySelector('dialog#drawer') as HTMLDialogElement;
+		if (drawer) {
+			drawer.showModal();
+		}
+	};
+</script>
