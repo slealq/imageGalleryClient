@@ -138,6 +138,11 @@ const { imageId } = Astro.props;
             (window as any).debugCropElements();
         }
 
+        flush() {
+            this.normalizedDeltaX = 0;
+            this.normalizedDeltaY = 0;
+        }
+
         _setNormalizedDeltas(deltaX: number, deltaY: number) {
             const imageRect = this.imagePreviewElement.getBoundingClientRect()
 
@@ -398,6 +403,10 @@ const { imageId } = Astro.props;
             console.error('Error applying crop:', error);
             // TODO: Show error message to user
         }
+
+        if (cropBoxHandler) {
+            cropBoxHandler.flush();
+        }
     }
 
     function updateRatio(size: number | null, button: HTMLElement) {
@@ -522,11 +531,19 @@ const { imageId } = Astro.props;
         // Close button handler
         document.getElementById('close-crop-modal')?.addEventListener('click', () => {
             cropModal?.classList.add('hidden');
+
+            if (cropBoxHandler) {
+                cropBoxHandler.flush();
+            }
         });
 
         // Cancel button handler
         document.getElementById('cancel-crop')?.addEventListener('click', () => {
             cropModal?.classList.add('hidden');
+
+            if (cropBoxHandler) {
+                cropBoxHandler.flush();
+            }
         });
 
         // Apply crop button handler
@@ -544,7 +561,7 @@ const { imageId } = Astro.props;
         button1024?.addEventListener('click', () => updateRatio(1024, button1024!));
 
         // Mouse event handlers for crop box
-        if (cropBox) {
+        if (cropBox && cropPreview) {
             cropBoxHandler = new CropboxHandler(cropPreview, cropBox);
             mouseHandler = new MouseHandler(cropBoxHandler);
         }
@@ -552,6 +569,13 @@ const { imageId } = Astro.props;
         cropBox?.addEventListener('mousedown', handleMouseDown);
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
+
+        // Add window resize handler
+        window.addEventListener('resize', () => {
+            if (cropBoxHandler) {
+                cropBoxHandler.refreshPosition();
+            }
+        });
     });
 
     // Make openCropModal available globally
