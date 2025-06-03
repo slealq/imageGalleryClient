@@ -24,6 +24,8 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
   const [totalPages, setTotalPages] = useState(initialTotalPages);
   const [selectedCount, setSelectedCount] = useState(0);
   const imageManagerRef = useRef<ImageManager | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   // Initialize ImageManager
   useEffect(() => {
@@ -167,20 +169,17 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
   }, [loadMoreImages, isLoading, hasMorePages, rows]);
 
   const handleExport = async () => {
-    if (!imageManagerRef.current) return;
+    if (!imageManagerRef.current || isExporting) return;
 
+    setIsExporting(true);
+    setExportError(null);
     try {
-      const blob = await imageManagerRef.current.exportSelectedImages();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'exported_images.zip';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await imageManagerRef.current.exportSelectedImages();
     } catch (error) {
       console.error('Error exporting images:', error);
+      setExportError(error instanceof Error ? error.message : 'Failed to export images');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -224,13 +223,25 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
           Open Drawer
         </button>
         {selectedCount > 0 && (
-          <button
-            type="button"
-            className="rounded-md bg-green-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-green-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
-            onClick={handleExport}
-          >
-            Export Selected ({selectedCount})
-          </button>
+          <div className="flex flex-col items-end gap-2">
+            {exportError && (
+              <div className="text-red-500 text-sm">
+                {exportError}
+              </div>
+            )}
+            <button
+              type="button"
+              disabled={isExporting}
+              className={`rounded-md px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                isExporting
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-green-600 hover:bg-green-500 focus-visible:outline-green-600'
+              }`}
+              onClick={handleExport}
+            >
+              {isExporting ? 'Exporting...' : `Export Selected (${selectedCount})`}
+            </button>
+          </div>
         )}
       </div>
 

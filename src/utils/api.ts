@@ -153,4 +153,38 @@ export async function getCroppedImage(imageId: string): Promise<Blob> {
     }
     
     return response.blob();
+}
+
+export async function exportImages(imageIds: string[]): Promise<Blob> {
+    console.log('Exporting images:', imageIds);
+    
+    const response = await fetch(`${API_BASE_URL}/api/export-images`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageIds })
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Export failed:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText
+        });
+        throw new Error(`Failed to export images: ${response.statusText}`);
+    }
+
+    const blob = await response.blob();
+    console.log('Export response:', {
+        type: blob.type,
+        size: blob.size
+    });
+
+    if (blob.size === 0) {
+        throw new Error('Received empty zip file from server');
+    }
+
+    return blob;
 } 

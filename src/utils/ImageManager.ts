@@ -1,4 +1,4 @@
-import { getImageCaption, saveImageCaption, getCroppedImage, getImageUrl, getCrop, API_BASE_URL } from './api';
+import { getImageCaption, saveImageCaption, getCroppedImage, getImageUrl, getCrop, API_BASE_URL, exportImages } from './api';
 
 export interface ImageProperties {
     has_caption: boolean;
@@ -174,27 +174,45 @@ export class ImageManager {
         this.images.forEach(img => img.setSelected(false));
     }
 
-    async exportSelectedImages(): Promise<Blob> {
+    async exportSelectedImages(): Promise<void> {
         const selectedImages = this.getSelectedImages();
         if (selectedImages.length === 0) {
             throw new Error('No images selected');
         }
 
-        const response = await fetch(`${this.baseUrl}/api/export-images`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                imageIds: selectedImages.map(img => img.getId())
-            })
-        });
+        console.log('Selected images for export:', selectedImages.map(img => ({
+            id: img.getId(),
+            filename: img.getFilename(),
+            hasCrop: img.getProperties().has_crop,
+            hasCaption: img.getProperties().has_caption
+        })));
 
-        if (!response.ok) {
-            throw new Error('Failed to export images');
+        try {
+            const blob = await exportImages(selectedImages.map(img => img.getId()));
+            
+            if (!blob || blob.size === 0) {
+                throw new Error('Received empty zip file from server');
+            }
+
+            // Create a temporary URL for the blob
+            const url = URL.createObjectURL(blob);
+            
+            // Create a temporary link element
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `exported_images_${new Date().toISOString().split('T')[0]}.zip`;
+            
+            // Append to body, click, and remove
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Clean up the URL object
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error exporting images:', error);
+            throw error;
         }
-
-        return response.blob();
     }
 }
 
