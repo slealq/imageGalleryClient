@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://192.168.68.53:4322';
+export const API_BASE_URL = 'http://192.168.68.53:4322';
 
 export interface ImageData {
     id: string;
@@ -39,6 +39,11 @@ export interface CropRequest {
 export interface CropInfo {
     targetSize: number;
     normalizedDeltas: NormalizedDeltas;
+}
+
+export interface CropResponse {
+    cropInfo: CropInfo;
+    imageUrl: string;
 }
 
 export async function fetchImages(page: number = 1, pageSize: number = 20): Promise<ImagesResponse> {
@@ -121,7 +126,7 @@ export async function cropImage(imageId: string, targetSize: number, normalizedD
     return response.blob();
 }
 
-export async function getCrop(imageId: string): Promise<CropInfo> {
+export async function getCrop(imageId: string): Promise<CropResponse> {
     const response = await fetch(`${API_BASE_URL}/images/${imageId}/crop`);
     if (!response.ok) {
         if (response.status === 404) {

@@ -41,7 +41,7 @@ const { imageId } = Astro.props;
 </div>
 
 <script>
-    import { getImageCaption, saveImageCaption, generateImageCaption } from '../utils/api';
+    import { getImageCaption, saveImageCaption, generateImageCaption, getCrop, getImagePreviewUrl, API_BASE_URL, getImageUrl } from '../utils/api';
 
     let captionModal: HTMLElement | null = null;
     let captionBox: HTMLElement | null = null;
@@ -196,6 +196,13 @@ const { imageId } = Astro.props;
         // Close caption modal button handler
         closeCaptionModalBtn?.addEventListener('click', () => {
             captionModal?.classList.add('hidden');
+            // Set fullscreen modal image back to original
+            if (currentImageId) {
+                const fullscreenImage = document.getElementById('modal-image') as HTMLImageElement;
+                if (fullscreenImage) {
+                    fullscreenImage.src = getImageUrl(currentImageId);
+                }
+            }
         });
 
         // Generate caption button handler
@@ -276,7 +283,7 @@ const { imageId } = Astro.props;
     });
 
     // Make functions available globally
-    (window as any).openCaptionModal = (imageId: string) => {
+    (window as any).openCaptionModal = async (imageId: string) => {
         currentImageId = imageId;
         captionModal?.classList.remove('hidden');
         // Apply saved opacity values
@@ -286,6 +293,18 @@ const { imageId } = Astro.props;
         if (captionText) {
             captionText.value = '';
         }
+
+        // Check if image has a crop and update the fullscreen modal image
+        try {
+            const cropResponse = await getCrop(imageId);
+            const fullscreenImage = document.getElementById('modal-image') as HTMLImageElement;
+            if (fullscreenImage) {
+                fullscreenImage.src = `${API_BASE_URL}${cropResponse.imageUrl}`;
+            }
+        } catch (error) {
+            // If no crop exists, do nothing - the original image will be shown
+        }
+
         loadCaption();
     };
 </script> 

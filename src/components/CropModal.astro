@@ -607,14 +607,14 @@ const { imageId } = Astro.props;
         if (cropPreview) {
             try {
                 // Check if image has existing crop
-                const cropInfo = await getCrop(imageId);
-                selectedRatio = cropInfo.targetSize;
+                const cropResponse = await getCrop(imageId);
+                selectedRatio = cropResponse.cropInfo.targetSize;
                 
                 // Set preview with the target size
-                cropPreview.src = getImagePreviewUrl(imageId, cropInfo.targetSize);
+                cropPreview.src = getImagePreviewUrl(imageId, cropResponse.cropInfo.targetSize);
                 
                 // Update button styles
-                const button = document.getElementById(`crop-${cropInfo.targetSize}`);
+                const button = document.getElementById(`crop-${cropResponse.cropInfo.targetSize}`);
                 if (button) {
                     updateButtonStyles(button);
                 }
@@ -626,10 +626,10 @@ const { imageId } = Astro.props;
 
                 // Initialize crop box with existing deltas
                 if (cropBox && cropPreview) {
-                    cropBoxHandler?.setNormalizedDeltas(cropInfo.normalizedDeltas.x, cropInfo.normalizedDeltas.y);
-                    // cropBoxHandler = new CropboxHandler(cropPreview, cropBox, cropInfo.normalizedDeltas);
-                    // mouseHandler = new MouseHandler(cropBoxHandler);
-                    // initializeCropBox();
+                    cropBoxHandler?.setNormalizedDeltas(
+                        cropResponse.cropInfo.normalizedDeltas.x,
+                        cropResponse.cropInfo.normalizedDeltas.y
+                    );
                 }
             } catch (error) {
                 // If no crop exists, start with original size
@@ -647,9 +647,7 @@ const { imageId } = Astro.props;
 
                 // Initialize crop box without deltas
                 if (cropBox && cropPreview) {
-                    // cropBoxHandler = new CropboxHandler(cropPreview, cropBox);
-                    // mouseHandler = new MouseHandler(cropBoxHandler);
-                    // initializeCropBox();
+                    cropBoxHandler?.setNormalizedDeltas(0, 0);
                 }
             }
         }
