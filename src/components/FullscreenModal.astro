@@ -59,6 +59,7 @@ const { imageUrl } = Astro.props;
     let currentImageIndex = -1;
     let isLoadingMore = false;
     let currentImageId: string | null = null;
+    let originalImageUrl: string | null = null;
 
     function formatFileSize(bytes: number): string {
         if (bytes === 0) return '0 Bytes';
@@ -146,7 +147,10 @@ const { imageUrl } = Astro.props;
             const created = img.getAttribute('data-created');
             const imageId = img.getAttribute('data-id');
             
-            if (imageUrl && modalImage) modalImage.src = imageUrl;
+            if (imageUrl && modalImage) {
+                modalImage.src = imageUrl;
+                originalImageUrl = imageUrl;
+            }
             if (filename && modalFilename) modalFilename.textContent = filename;
             if (size && modalSize) modalSize.textContent = formatFileSize(parseInt(size));
             if (created && modalDate) modalDate.textContent = formatDate(created);
@@ -177,6 +181,7 @@ const { imageUrl } = Astro.props;
         if (!modal || !modalImage || !modalFilename || !modalSize || !modalDate) return;
         
         currentImageId = imageId;
+        originalImageUrl = imageUrl;
         
         // Update image elements list
         imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
@@ -296,6 +301,27 @@ const { imageUrl } = Astro.props;
                 (window as any).openCropModal(currentImageId);
             }
         });
+
+        // Listen for crop modal open/close
+        const cropModal = document.getElementById('crop-modal');
+        if (cropModal) {
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.attributeName === 'class') {
+                        const isHidden = cropModal.classList.contains('hidden');
+                        if (!isHidden && currentImageId && modalImage) {
+                            // When crop modal opens, show cropped version
+                            modalImage.src = `http://127.0.0.1:8000/images/${currentImageId}/cropped`;
+                        } else if (isHidden && originalImageUrl && modalImage) {
+                            // When crop modal closes, show original version
+                            modalImage.src = originalImageUrl;
+                        }
+                    }
+                });
+            });
+
+            observer.observe(cropModal, { attributes: true });
+        }
     });
 
     // Make openModal available globally
