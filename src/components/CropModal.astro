@@ -56,6 +56,7 @@ const { imageId } = Astro.props;
 
 <script>
     import { getImageUrl, getImagePreviewUrl, cropImage } from '../utils/api';
+    import type { NormalizedDelta } from '../utils/api';
 
     type CropBoxPosition = {
         left: number;
@@ -69,6 +70,7 @@ const { imageId } = Astro.props;
         toTop: number;
         toBottom: number;
     }
+
 
     class CropboxHandler {
         imagePreviewElement: HTMLImageElement;
@@ -141,6 +143,15 @@ const { imageId } = Astro.props;
         flush() {
             this.normalizedDeltaX = 0;
             this.normalizedDeltaY = 0;
+        }
+
+        getNormalizedDeltas() {
+            const normalizedDelta: NormalizedDelta = {
+                x: this.normalizedDeltaX,
+                y: this.normalizedDeltaY,
+            }
+
+            return normalizedDelta;
         }
 
         _setNormalizedDeltas(deltaX: number, deltaY: number) {
@@ -369,18 +380,13 @@ const { imageId } = Astro.props;
     }
 
     async function applyCrop() {
-        if (!currentImageId || !cropBox) return;
+        if (!currentImageId || !cropBox || !cropBoxHandler) return;
         
         try {
             const blob = await cropImage(
                 currentImageId,
-                selectedRatio || 512, // Default to 512 if original size
-                {
-                    x: parseInt(cropBox.style.left),
-                    y: parseInt(cropBox.style.top),
-                    width: parseInt(cropBox.style.width),
-                    height: parseInt(cropBox.style.height)
-                }
+                selectedRatio || 1024, // Default to 1024 if original size
+                cropBoxHandler.getNormalizedDeltas()
             );
             
             const url = URL.createObjectURL(blob);

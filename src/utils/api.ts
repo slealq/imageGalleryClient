@@ -25,17 +25,15 @@ export interface CaptionResponse {
     caption: string;
 }
 
-export interface CropBox {
+export interface NormalizedDeltas {
     x: number;
     y: number;
-    width: number;
-    height: number;
 }
 
 export interface CropRequest {
     imageId: string;
     targetSize: number;
-    cropBox: CropBox;
+    normalizedDeltas: NormalizedDeltas;
 }
 
 export async function fetchImages(page: number = 1, pageSize: number = 20): Promise<ImagesResponse> {
@@ -90,18 +88,26 @@ export function getImagePreviewUrl(imageId: string, targetSize: number): string 
     return `${API_BASE_URL}/images/${imageId}/preview/${targetSize}`;
 }
 
-export async function cropImage(imageId: string, targetSize: number, cropBox: CropBox): Promise<Blob> {
-    const response = await fetch(`${API_BASE_URL}/images/${imageId}/crop`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            imageId,
-            targetSize,
-            cropBox
-        }),
-    });
+export async function cropImage(imageId: string, targetSize: number, normalizedDeltas: NormalizedDeltas): Promise<Blob> {
+    const response = await fetch (
+        `${API_BASE_URL}/images/${imageId}/crop`, 
+        {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(
+                { 
+                    "imageId": imageId, 
+                    "targetSize": targetSize,  
+                    "normalizedDeltas": {
+                        "x": normalizedDeltas.x,
+                        "y": normalizedDeltas.y
+                    } 
+                }
+            ),
+        }
+    );
     
     if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
