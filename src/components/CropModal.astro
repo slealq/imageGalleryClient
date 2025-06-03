@@ -35,13 +35,9 @@ const { imageId } = Astro.props;
         </div>
         
         <div class="flex-1 relative bg-gray-800 rounded-lg overflow-hidden min-h-0">
-            <div class="absolute inset-0 flex items-center justify-center">
-                <div class="relative w-full h-full flex items-center justify-center">
-                    <div class="inline-block">
-                        <img id="crop-preview" src="" alt="" class="max-w-full max-h-full object-contain" />
-                        <div id="crop-box" class="absolute max-w-full max-h-full object-contain border-2 border-red-500 bg-red-500/20"></div>
-                    </div>
-                </div>
+            <div id="modal-background" class="flex-1 flex items-center justify-center p-4 pb-20">
+                <img id="crop-preview" src="" alt="" class="max-w-[95vw] max-h-[95vh] w-auto h-auto object-contain" />
+                <div id="crop-box" class="absolute max-w-full max-h-full object-contain border-2 border-red-500 bg-red-500/20"></div>
             </div>
         </div>
 
