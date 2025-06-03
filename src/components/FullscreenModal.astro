@@ -1,6 +1,7 @@
 ---
 import CaptionModal from './CaptionModal.astro';
 import CropModal from './CropModal.astro';
+import { ImageManager } from '../utils/ImageManager';
 
 interface Props {
     imageUrl?: string;
@@ -50,6 +51,7 @@ const { imageUrl } = Astro.props;
 
 <script>
     import { getCroppedImage } from '../utils/api';
+    import { ImageManager } from '../utils/ImageManager';
 
     let modal: HTMLElement | null = null;
     let modalImage: HTMLImageElement | null = null;
@@ -62,7 +64,6 @@ const { imageUrl } = Astro.props;
     let isLoadingMore = false;
     let currentImageId: string | null = null;
     let originalImageUrl: string | null = null;
-
 
     function formatFileSize(bytes: number): string {
         if (bytes === 0) return '0 Bytes';
@@ -84,32 +85,23 @@ const { imageUrl } = Astro.props;
     }
 
     function updateStatuses(imageId: string) {
-        const properties = window.getImageProperties?.(imageId);
-        const hasCaption = properties?.has_caption ?? false;
-        const hasTags = properties?.has_tags ?? false;
-        const hasCrop = properties?.has_crop ?? false;
-
-        console.log("Image ID:", imageId);
-        console.log("Properties:", {
-            hasCaption,
-            hasTags,
-            hasCrop
-        });
+        const properties = window.imageManager.getImageProperties(imageId);
+        if (!properties) return;
 
         // Update caption status
         const statusDot = document.querySelector('#caption-status .w-2');
         const statusText = document.querySelector('#caption-status span:last-child');
         if (statusDot && statusText) {
-            statusDot.className = `w-2 h-2 rounded-full ${hasCaption ? 'bg-green-500' : 'bg-red-500'}`;
-            statusText.textContent = hasCaption ? 'Has Caption' : 'No Caption';
+            statusDot.className = `w-2 h-2 rounded-full ${properties.has_caption ? 'bg-green-500' : 'bg-red-500'}`;
+            statusText.textContent = properties.has_caption ? 'Has Caption' : 'No Caption';
         }
 
         // Update crop status
         const cropStatusDot = document.querySelector('#crop-status .w-2');
         const cropStatusText = document.querySelector('#crop-status span:last-child');
         if (cropStatusDot && cropStatusText) {
-            cropStatusDot.className = `w-2 h-2 rounded-full ${hasCrop ? 'bg-green-500' : 'bg-red-500'}`;
-            cropStatusText.textContent = hasCrop ? 'Has Crop' : 'No Crop';
+            cropStatusDot.className = `w-2 h-2 rounded-full ${properties.has_crop ? 'bg-green-500' : 'bg-red-500'}`;
+            cropStatusText.textContent = properties.has_crop ? 'Has Crop' : 'No Crop';
         }
     }
 
@@ -120,17 +112,13 @@ const { imageUrl } = Astro.props;
             ? Math.min(currentImageIndex + 1, imageElements.length - 1)
             : Math.max(currentImageIndex - 1, 0);
             
-        // If we're at the last image and trying to go next, trigger loading more
         if (direction === 'next' && currentImageIndex === imageElements.length - 1 && !isLoadingMore) {
             isLoadingMore = true;
             try {
-                // Call the global loadMoreImages function from Gallery
                 if (window.loadMoreImages) {
                     const success = await window.loadMoreImages();
                     if (success) {
-                        // Update our elements list with newly loaded images
                         imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
-                        // If we successfully loaded more images, navigate to the next one
                         if (currentImageIndex < imageElements.length - 1) {
                             newIndex = currentImageIndex + 1;
                         }
@@ -144,29 +132,33 @@ const { imageUrl } = Astro.props;
         if (newIndex !== currentImageIndex) {
             currentImageIndex = newIndex;
             const img = imageElements[currentImageIndex];
-            const imageUrl = img.src;
-            const filename = img.getAttribute('data-filename');
-            const size = img.getAttribute('data-size');
-            const created = img.getAttribute('data-created');
             const imageId = img.getAttribute('data-id');
             
-            if (imageUrl && modalImage) {
-                modalImage.src = imageUrl;
-                originalImageUrl = imageUrl;
-            }
-            if (filename && modalFilename) modalFilename.textContent = filename;
-            if (size && modalSize) modalSize.textContent = formatFileSize(parseInt(size));
-            if (created && modalDate) modalDate.textContent = formatDate(created);
-            if (imageId) currentImageId = imageId;
+            if (imageId) {
+                const image = await window.imageManager.createImageFromUrl(
+                    img.src,
+                    imageId,
+                    img.getAttribute('data-filename') || '',
+                    parseInt(img.getAttribute('data-size') || '0'),
+                    img.getAttribute('data-created') || ''
+                );
+                currentImageId = imageId;
+                
+                if (modalImage) {
+                    modalImage.src = image.getUrl();
+                    originalImageUrl = image.getUrl();
+                }
+                if (modalFilename) modalFilename.textContent = image.getFilename();
+                if (modalSize) modalSize.textContent = formatFileSize(image.getSize());
+                if (modalDate) modalDate.textContent = formatDate(image.getCreated());
 
-            if (currentImageId) {
-                updateStatuses(currentImageId);
-            }
+                updateStatuses(imageId);
 
-            // If caption modal is open, update it with the new image's caption
-            const captionModal = document.getElementById('caption-modal');
-            if (captionModal && !captionModal.classList.contains('hidden') && imageId) {
-                (window as any).openCaptionModal(imageId);
+                // If caption modal is open, update it with the new image's caption
+                const captionModal = document.getElementById('caption-modal');
+                if (captionModal && !captionModal.classList.contains('hidden')) {
+                    (window as any).openCaptionModal(imageId);
+                }
             }
         }
     }
@@ -194,17 +186,24 @@ const { imageUrl } = Astro.props;
         
         if (img) {
             currentImageIndex = imageElements.indexOf(img);
-        }
-        
-        modalImage.src = imageUrl;
-        modalFilename.textContent = filename;
-        modalSize.textContent = formatFileSize(parseInt(size));
-        modalDate.textContent = formatDate(created);
-        modal.classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
+            const image = await window.imageManager.createImageFromUrl(
+                imageUrl,
+                imageId,
+                filename,
+                parseInt(size),
+                created
+            );
+            
+            modalImage.src = image.getUrl();
+            modalFilename.textContent = image.getFilename();
+            modalSize.textContent = formatFileSize(image.getSize());
+            modalDate.textContent = formatDate(image.getCreated());
+            
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
 
-        // Update statuses using properties cache
-        updateStatuses(imageId);
+            updateStatuses(imageId);
+        }
     }
 
     function closeModal() {
@@ -218,17 +217,20 @@ const { imageUrl } = Astro.props;
         if (!currentImageId || !modalImage) return;
         
         try {
-            console.log("Executing updateCropImage 220")
+            const image = window.imageManager.getImage(currentImageId);
+            if (!image) return;
 
-            const blob = await getCroppedImage(currentImageId);
-            const blobUrl = URL.createObjectURL(blob);
-            
-            // Clean up previous blob URL if it exists
-            if (modalImage.src.startsWith('blob:')) {
-                URL.revokeObjectURL(modalImage.src);
+            const blob = await image.getCroppedImage();
+            if (blob) {
+                const blobUrl = URL.createObjectURL(blob);
+                
+                // Clean up previous blob URL if it exists
+                if (modalImage.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(modalImage.src);
+                }
+                
+                modalImage.src = blobUrl;
             }
-            
-            modalImage.src = blobUrl;
         } catch (error) {
             console.error('Error fetching cropped image:', error);
         }
@@ -257,9 +259,7 @@ const { imageUrl } = Astro.props;
         // Caption button click handler
         captionButton?.addEventListener('click', () => {
             if (currentImageId) {
-                // Update the cropped image before opening caption modal
                 updateCropImage();
-
                 (window as any).openCaptionModal(currentImageId);
             }
         });
@@ -360,6 +360,9 @@ const { imageUrl } = Astro.props;
                         if (!isHidden && currentImageId && modalImage) {
                             // When caption modal opens, re-fetch the image
                             updateCropImage();
+                        } else if (isHidden && currentImageId) {
+                            // When caption modal closes, update the status
+                            updateStatuses(currentImageId);
                         }
                     }
                 });

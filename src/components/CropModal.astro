@@ -56,6 +56,7 @@ const { imageId } = Astro.props;
 
 <script>
     import { getImageUrl, getImagePreviewUrl, cropImage, getCrop } from '../utils/api';
+    import { ImageManager } from '../utils/ImageManager';
     import type { NormalizedDeltas } from '../utils/api';
 
     type CropBoxPosition = {
@@ -399,10 +400,10 @@ const { imageId } = Astro.props;
             
             const url = URL.createObjectURL(blob);
             
-            // Update the fullscreen modal image
-            const fullscreenImage = document.getElementById('modal-image') as HTMLImageElement;
-            if (fullscreenImage) {
-                // fullscreenImage.src = url;
+            // Update the image in the ImageManager
+            const image = window.imageManager.getImage(currentImageId);
+            if (image) {
+                image.updateProperties({ has_crop: true });
             }
 
             // Update the has_crop property on the image element
@@ -412,12 +413,11 @@ const { imageId } = Astro.props;
             }
 
             // Update crop status
-            const hasCrop = imageElement?.getAttribute('data-has-crop') === 'true';
             const cropStatusDot = document.querySelector('#crop-status .w-2');
             const cropStatusText = document.querySelector('#crop-status span:last-child');
             if (cropStatusDot && cropStatusText) {
-                cropStatusDot.className = `w-2 h-2 rounded-full ${hasCrop ? 'bg-green-500' : 'bg-red-500'}`;
-                cropStatusText.textContent = hasCrop ? 'Has Crop' : 'No Crop';
+                cropStatusDot.className = `w-2 h-2 rounded-full bg-green-500`;
+                cropStatusText.textContent = 'Has Crop';
             }
             
             // Close the crop modal
@@ -439,9 +439,12 @@ const { imageId } = Astro.props;
             const currentWidth = cropPreview.width;
             const currentHeight = cropPreview.height;
 
+            const image = window.imageManager.getImage(currentImageId);
+            if (!image) return;
+
             if (size === null) {
                 // Use original image
-                cropPreview.src = getImageUrl(currentImageId);
+                cropPreview.src = image.getUrl();
             } else {
                 // Use preview with specified size
                 cropPreview.src = getImagePreviewUrl(currentImageId, size);
@@ -451,8 +454,6 @@ const { imageId } = Astro.props;
             const img = cropPreview;  // Create reference to avoid null checks
             img.onload = () => {
                 if (img) {  // Double check img still exists
-                    // img.style.width = `${currentWidth}px`;
-                    // img.style.height = `${currentHeight}px`;
                     initializeCropBox();
                 }
             };
@@ -605,6 +606,9 @@ const { imageId } = Astro.props;
     (window as any).openCropModal = async (imageId: string) => {
         currentImageId = imageId;
         if (cropPreview) {
+            const image = window.imageManager.getImage(imageId);
+            if (!image) return;
+
             try {
                 // Check if image has existing crop
                 const cropResponse = await getCrop(imageId);
@@ -633,7 +637,7 @@ const { imageId } = Astro.props;
                 }
             } catch (error) {
                 // If no crop exists, start with original size
-                cropPreview.src = getImageUrl(imageId);
+                cropPreview.src = image.getUrl();
                 selectedRatio = null;
                 const originalButton = document.getElementById('crop-original');
                 if (originalButton) {

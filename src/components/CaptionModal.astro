@@ -41,7 +41,8 @@ const { imageId } = Astro.props;
 </div>
 
 <script>
-    import { getImageCaption, saveImageCaption, generateImageCaption, getCrop, getImagePreviewUrl, API_BASE_URL, getImageUrl } from '../utils/api';
+    import { generateImageCaption, getCrop, getImagePreviewUrl, API_BASE_URL, getImageUrl } from '../utils/api';
+    import { ImageManager } from '../utils/ImageManager';
 
     let captionModal: HTMLElement | null = null;
     let captionBox: HTMLElement | null = null;
@@ -120,7 +121,10 @@ const { imageId } = Astro.props;
     async function loadCaption() {
         if (!currentImageId || !captionText) return;
         try {
-            const caption = await getImageCaption(currentImageId);
+            const image = window.imageManager.getImage(currentImageId);
+            if (!image) return;
+
+            const caption = await image.getCaption();
             captionText.value = caption;
             updateCaptionStatus(caption.length > 0);
         } catch (error) {
@@ -132,11 +136,9 @@ const { imageId } = Astro.props;
     async function handleGenerateCaption() {
         if (!currentImageId || !captionText) return;
         try {
-            // Add visual feedback and disable button
             generateCaptionBtn?.classList.add('bg-purple-800', 'opacity-50', 'cursor-not-allowed');
             generateCaptionBtn?.setAttribute('disabled', 'true');
             
-            // Start the timer
             startTimer();
             
             const generatedCaption = await generateImageCaption(currentImageId);
@@ -144,10 +146,7 @@ const { imageId } = Astro.props;
         } catch (error) {
             console.error('Error generating caption:', error);
         } finally {
-            // Stop the timer
             stopTimer();
-            
-            // Remove visual feedback and re-enable button
             generateCaptionBtn?.classList.remove('bg-purple-800', 'opacity-50', 'cursor-not-allowed');
             generateCaptionBtn?.removeAttribute('disabled');
         }
@@ -156,10 +155,12 @@ const { imageId } = Astro.props;
     async function handleSaveCaption() {
         if (!currentImageId || !captionText) return;
         try {
-            // Add visual feedback
             saveCaptionBtn?.classList.add('bg-green-800');
             
-            await saveImageCaption(currentImageId, captionText.value);
+            const image = window.imageManager.getImage(currentImageId);
+            if (!image) return;
+
+            await image.saveCaption(captionText.value);
             updateCaptionStatus(captionText.value.length > 0);
             
             // Update the data attributes on the image element
@@ -168,14 +169,12 @@ const { imageId } = Astro.props;
                 imageElement.setAttribute('data-has-caption', captionText.value.length > 0 ? 'true' : 'false');
             }
             
-            // Wait for visual feedback before closing
             setTimeout(() => {
                 saveCaptionBtn?.classList.remove('bg-green-800');
                 captionModal?.classList.add('hidden');
             }, 200);
         } catch (error) {
             console.error('Error saving caption:', error);
-            // Remove visual feedback on error
             saveCaptionBtn?.classList.remove('bg-green-800');
         }
     }
@@ -286,22 +285,19 @@ const { imageId } = Astro.props;
     (window as any).openCaptionModal = async (imageId: string) => {
         currentImageId = imageId;
         captionModal?.classList.remove('hidden');
-        // Apply saved opacity values
         updateOpacity(currentOpacity);
         updateBoxOpacity(currentBoxOpacity);
-        // Clear the textarea before loading new caption
+        
         if (captionText) {
             captionText.value = '';
         }
 
         // Check if image has a crop and update the fullscreen modal image
         try {
-            console.log("In the check if image has crop")
+            const image = window.imageManager.getImage(imageId);
+            if (!image) return;
 
             const cropResponse = await getCrop(imageId);
-
-            console.log("Crop response:", cropResponse);
-
             const fullscreenImage = document.getElementById('modal-image') as HTMLImageElement;
             if (fullscreenImage) {
                 fullscreenImage.src = `${API_BASE_URL}${cropResponse.imageUrl}`;
