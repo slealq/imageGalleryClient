@@ -77,8 +77,6 @@ const { imageId } = Astro.props;
         normalizedDeltaX: number;
         normalizedDeltaY: number;
 
-        currentSize: number;
-
         constructor(
             imagePreviewElement: HTMLImageElement,
             cropBoxElement: HTMLElement) {
@@ -90,26 +88,26 @@ const { imageId } = Astro.props;
         }
 
         applyDelta(deltaX: number, deltaY: number) {
-            let position = this._getCurrentPosition();
+            //let position = this._getCurrentPosition();
 
             const availableSpace = this._getPossibleSpace();
 
             // console.log(`Deltas are: deltaX: ${deltaX} and deltaY: ${deltaY}`);
 
             if (deltaX > 0) {
-                position.left += this._getPositionWithLimit(deltaX, availableSpace.toRight);
+                deltaX = this._getDeltaWithLimit(deltaX, availableSpace.toRight);
             }
 
             if (deltaX < 0) {
-                position.left -= this._getPositionWithLimit(-deltaX, availableSpace.toLeft);
+                deltaX = -this._getDeltaWithLimit(-deltaX, availableSpace.toLeft);
             }
 
             if (deltaY > 0) {
-                position.top += this._getPositionWithLimit(deltaY, availableSpace.toBottom);
+                deltaY = this._getDeltaWithLimit(deltaY, availableSpace.toBottom);
             }
 
             if (deltaY < 0) {
-                position.top -= this._getPositionWithLimit(-deltaY, availableSpace.toTop);
+                deltaY = -this._getDeltaWithLimit(-deltaY, availableSpace.toTop);
             }
 
             this._setNormalizedDeltas(deltaX, deltaY);
@@ -176,9 +174,7 @@ const { imageId } = Astro.props;
             return position;
         }
 
-        _getPositionWithLimit(delta: number, availableSpace: number) {
-
-            return delta;
+        _getDeltaWithLimit(delta: number, availableSpace: number) {
 
             if ( availableSpace > delta) {
                 return delta;
@@ -278,8 +274,6 @@ const { imageId } = Astro.props;
 
     class MouseHandler {
         isDragging: boolean;
-        currentDeltax: number;
-        currentDeltay: number;
 
         currentX: number;
         currentY: number;
@@ -288,8 +282,6 @@ const { imageId } = Astro.props;
 
         constructor(cropBoxHandler: CropboxHandler) {
             this.isDragging = false;
-            this.currentDeltax = 0;
-            this.currentDeltay = 0;
 
             this.currentX = 0;
             this.currentY = 0;
@@ -309,13 +301,13 @@ const { imageId } = Astro.props;
                 return;
             }
 
-            this.currentDeltax = e.clientX - this.currentX;
-            this.currentDeltay = e.clientY - this.currentY;
+            let currentDeltax = e.clientX - this.currentX;
+            let currentDeltay = e.clientY - this.currentY;
 
             this.currentX = e.clientX;
             this.currentY = e.clientY;
 
-            this.cropBoxHandler.applyDelta(this.currentDeltax, this.currentDeltay);
+            this.cropBoxHandler.applyDelta(currentDeltax, currentDeltay);
         }
 
         handleMouseUp() {
