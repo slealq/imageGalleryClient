@@ -237,18 +237,37 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
                 {exportError}
               </div>
             )}
-            <button
-              type="button"
-              disabled={isExporting}
-              className={`rounded-md px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
-                isExporting
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-green-600 hover:bg-green-500 focus-visible:outline-green-600'
-              }`}
-              onClick={handleExport}
-            >
-              {isExporting ? 'Exporting...' : `Export Selected (${selectedCount})`}
-            </button>
+            <div className="flex items-center gap-4">
+              <div className="text-white">
+                Selected: <span id="selected-count">{selectedCount}</span>
+              </div>
+              <button
+                id="export-button"
+                className={`px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                  isExporting ? 'bg-gray-400 cursor-not-allowed' : ''
+                }`}
+                onClick={handleExport}
+                disabled={isExporting}
+              >
+                {isExporting ? 'Exporting...' : 'Export Selected'}
+              </button>
+              <button
+                id="clear-selection-button"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                onClick={() => {
+                  if (window.imageManager) {
+                    window.imageManager.clearSelection();
+                    // Update the selected count
+                    const selectedCount = document.getElementById('selected-count');
+                    if (selectedCount) {
+                      selectedCount.textContent = '0';
+                    }
+                  }
+                }}
+              >
+                Clear Selection
+              </button>
+            </div>
           </div>
         )}
       </div>
