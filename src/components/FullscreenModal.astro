@@ -13,7 +13,18 @@ const { imageUrl } = Astro.props;
 <div id="modal" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center">
     <div class="relative w-full h-full flex flex-col">
         <div id="modal-background" class="flex-1 flex items-center justify-center p-4 pb-20">
-            <img id="modal-image" src="" alt="" class="max-w-[95vw] max-h-[95vh] w-auto h-auto object-contain" />
+            <div class="relative">
+                <img id="modal-image" src="" alt="" class="max-w-[95vw] max-h-[95vh] w-auto h-auto object-contain" />
+                <button 
+                    id="modal-selection-button"
+                    class="absolute top-4 right-4 w-8 h-8 rounded-full border-2 border-white bg-black/50 hover:bg-black/70 transition-colors z-10"
+                    data-id=""
+                >
+                    <svg class="w-full h-full text-white hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                </button>
+            </div>
         </div>
         <div id="modal-footer" class="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm p-4 text-white text-sm">
             <div class="container mx-auto">
@@ -163,6 +174,18 @@ const { imageUrl } = Astro.props;
         }
     }
 
+    function updateSelectionButton(selected: boolean) {
+        const button = document.getElementById('modal-selection-button');
+        if (!button) return;
+
+        const checkmark = button.querySelector('svg');
+        if (checkmark) {
+            checkmark.classList.toggle('hidden', !selected);
+        }
+        button.classList.toggle('bg-green-500', selected);
+        button.classList.toggle('bg-black/50', !selected);
+    }
+
     async function openModal(
         imageUrl: string,
         filename: string,
@@ -194,6 +217,13 @@ const { imageUrl } = Astro.props;
                 created
             );
             
+            // Update selection button
+            const selectionButton = document.getElementById('modal-selection-button');
+            if (selectionButton) {
+                selectionButton.setAttribute('data-id', imageId);
+                updateSelectionButton(image.isSelected());
+            }
+
             modalImage.src = image.getUrl();
             modalFilename.textContent = image.getFilename();
             modalSize.textContent = formatFileSize(image.getSize());
@@ -384,6 +414,30 @@ const { imageUrl } = Astro.props;
                 }, 100);
             });
         }
+
+        // Selection button handler
+        const selectionButton = document.getElementById('modal-selection-button');
+        selectionButton?.addEventListener('click', () => {
+            if (!currentImageId) return;
+
+            const image = window.imageManager.getImage(currentImageId);
+            if (!image) return;
+
+            const selected = !image.isSelected();
+            image.setSelected(selected);
+            updateSelectionButton(selected);
+
+            // Update the gallery selection button if it exists
+            const galleryButton = document.querySelector(`.selection-button[data-id="${currentImageId}"]`);
+            if (galleryButton) {
+                const checkmark = galleryButton.querySelector('svg');
+                if (checkmark) {
+                    checkmark.classList.toggle('hidden', !selected);
+                }
+                galleryButton.classList.toggle('bg-green-500', selected);
+                galleryButton.classList.toggle('bg-black/50', !selected);
+            }
+        });
     });
 
     // Make openModal available globally

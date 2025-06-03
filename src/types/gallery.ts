@@ -10,6 +10,7 @@ export interface ImageData {
     has_tags: boolean;
     has_crop: boolean;
     mime_type: string;
+    url?: string;
 }
 
 export interface Row {

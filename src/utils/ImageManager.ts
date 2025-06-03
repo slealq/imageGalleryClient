@@ -1,9 +1,10 @@
-import { getImageCaption, saveImageCaption, getCroppedImage, getImageUrl, getCrop } from './api';
+import { getImageCaption, saveImageCaption, getCroppedImage, getImageUrl, getCrop, API_BASE_URL } from './api';
 
 export interface ImageProperties {
     has_caption: boolean;
     has_tags: boolean;
     has_crop: boolean;
+    is_selected: boolean;
 }
 
 export interface ImageMetadata {
@@ -25,7 +26,8 @@ export class ImageData {
         this.properties = {
             has_caption: false,
             has_tags: false,
-            has_crop: false
+            has_crop: false,
+            is_selected: false
         };
     }
 
@@ -110,11 +112,20 @@ export class ImageData {
     updateProperties(properties: Partial<ImageProperties>) {
         this.properties = { ...this.properties, ...properties };
     }
+
+    setSelected(selected: boolean) {
+        this.properties.is_selected = selected;
+    }
+
+    isSelected(): boolean {
+        return this.properties.is_selected;
+    }
 }
 
 export class ImageManager {
     private static instance: ImageManager;
     private images: Map<string, ImageData> = new Map();
+    private baseUrl: string = API_BASE_URL;
 
     private constructor() {}
 
@@ -123,6 +134,10 @@ export class ImageManager {
             ImageManager.instance = new ImageManager();
         }
         return ImageManager.instance;
+    }
+
+    getImageUrl(imageId: string): string {
+        return `${this.baseUrl}/images/${imageId}`;
     }
 
     async addImage(metadata: ImageMetadata): Promise<ImageData> {
@@ -150,6 +165,37 @@ export class ImageManager {
         };
         return this.addImage(metadata);
     }
+
+    getSelectedImages(): ImageData[] {
+        return Array.from(this.images.values()).filter(img => img.isSelected());
+    }
+
+    clearSelection() {
+        this.images.forEach(img => img.setSelected(false));
+    }
+
+    async exportSelectedImages(): Promise<Blob> {
+        const selectedImages = this.getSelectedImages();
+        if (selectedImages.length === 0) {
+            throw new Error('No images selected');
+        }
+
+        const response = await fetch(`${this.baseUrl}/api/export-images`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                imageIds: selectedImages.map(img => img.getId())
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to export images');
+        }
+
+        return response.blob();
+    }
 }
 
 // Make ImageManager globally available
@@ -159,4 +205,7 @@ declare global {
     }
 }
 
-window.imageManager = ImageManager.getInstance(); 
+// Only assign to window if we're in a browser environment
+if (typeof window !== 'undefined') {
+    window.imageManager = ImageManager.getInstance();
+} 
