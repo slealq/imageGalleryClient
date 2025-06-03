@@ -136,4 +136,21 @@ export async function getCrop(imageId: string): Promise<CropResponse> {
         throw new Error(`HTTP error! status: ${response.status}`);
     }
     return response.json();
+}
+
+export async function getCroppedImage(imageId: string): Promise<Blob> {
+    const timestamp = new Date().getTime();
+    const response = await fetch(`${API_BASE_URL}/images/${imageId}/cropped?t=${timestamp}`, {
+        cache: 'no-store',
+        headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+        }
+    });
+    
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return response.blob();
 } 

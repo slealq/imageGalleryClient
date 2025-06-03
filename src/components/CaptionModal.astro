@@ -302,7 +302,6 @@ const { imageId } = Astro.props;
 
             console.log("Crop response:", cropResponse);
 
-
             const fullscreenImage = document.getElementById('modal-image') as HTMLImageElement;
             if (fullscreenImage) {
                 fullscreenImage.src = `${API_BASE_URL}${cropResponse.imageUrl}`;

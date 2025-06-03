@@ -49,6 +49,8 @@ const { imageUrl } = Astro.props;
 <CropModal imageId="" />
 
 <script>
+    import { getCroppedImage } from '../utils/api';
+
     let modal: HTMLElement | null = null;
     let modalImage: HTMLImageElement | null = null;
     let modalFilename: HTMLElement | null = null;
@@ -210,6 +212,27 @@ const { imageUrl } = Astro.props;
         document.body.style.overflow = '';
     }
 
+    // Function to update the modal image with the cropped version
+    async function updateCropImage() {
+        if (!currentImageId || !modalImage) return;
+        
+        try {
+            console.log("Executing updateCropImage 220")
+
+            const blob = await getCroppedImage(currentImageId);
+            const blobUrl = URL.createObjectURL(blob);
+            
+            // Clean up previous blob URL if it exists
+            if (modalImage.src.startsWith('blob:')) {
+                URL.revokeObjectURL(modalImage.src);
+            }
+            
+            modalImage.src = blobUrl;
+        } catch (error) {
+            console.error('Error fetching cropped image:', error);
+        }
+    }
+
     // Initialize modal elements
     document.addEventListener('DOMContentLoaded', () => {
         modal = document.getElementById('modal');
@@ -233,6 +256,9 @@ const { imageUrl } = Astro.props;
         // Caption button click handler
         captionButton?.addEventListener('click', () => {
             if (currentImageId) {
+                // Update the cropped image before opening caption modal
+                updateCropImage();
+
                 (window as any).openCaptionModal(currentImageId);
             }
         });
@@ -311,7 +337,7 @@ const { imageUrl } = Astro.props;
                         const isHidden = cropModal.classList.contains('hidden');
                         if (!isHidden && currentImageId && modalImage) {
                             // When crop modal opens, show cropped version
-                            modalImage.src = `http://127.0.0.1:8000/images/${currentImageId}/cropped`;
+                            updateCropImage();
                         } else if (isHidden && originalImageUrl && modalImage) {
                             // When crop modal closes, show original version
                             modalImage.src = originalImageUrl;
@@ -321,6 +347,15 @@ const { imageUrl } = Astro.props;
             });
 
             observer.observe(cropModal, { attributes: true });
+        }
+
+        // Listen for crop application
+        const applyCropButton = document.getElementById('apply-crop');
+        if (applyCropButton) {
+            applyCropButton.addEventListener('click', () => {
+                // Wait a short moment for the server to process the crop
+                setTimeout(updateCropImage, 100);
+            });
         }
     });
 
