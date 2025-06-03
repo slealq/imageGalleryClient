@@ -57,84 +57,73 @@ const { imageId } = Astro.props;
 <script>
     import { getImageUrl, getImagePreviewUrl, cropImage } from '../utils/api';
 
+    type CropBoxPosition = {
+        left: number;
+        top: number;
+        size: number;
+    };
+
+    type AvailableSpace = {
+        toLeft: number;
+        toRight: number;
+        toTop: number;
+        toBottom: number;
+    }
+
     class CropboxHandler {
         imagePreviewElement: HTMLImageElement;
         cropBoxElement: HTMLElement;
+
+        normalizedDeltaX: number;
+        normalizedDeltaY: number;
+
+        currentSize: number;
 
         constructor(
             imagePreviewElement: HTMLImageElement,
             cropBoxElement: HTMLElement) {
             this.imagePreviewElement = imagePreviewElement;
             this.cropBoxElement = cropBoxElement;
+
+            this.normalizedDeltaX = 0;
+            this.normalizedDeltaY = 0;
         }
 
-        getCenterPosition() {
-            const imageRect = this.imagePreviewElement.getBoundingClientRect()
-            const cropBoxRect = this.cropBoxElement.getBoundingClientRect()
+        applyDelta(deltaX: number, deltaY: number) {
+            let position = this._getCurrentPosition();
 
-            const size = Math.min(imageRect.width, imageRect.height);
+            const availableSpace = this._getPossibleSpace();
 
-            console.log("Height of the image is : ", imageRect.height);
-            console.log("Width of the image is : ", imageRect.width);
-            console.log("left of the image is : ", imageRect.left);
-            console.log("top of the image is : ", imageRect.top);     
+            // console.log(`Deltas are: deltaX: ${deltaX} and deltaY: ${deltaY}`);
 
-            // Slack is how much room the square red box can move horizontally or vertically within the
-            // image. This is required to get center position, because depending on the slack, we 
-            // will center the red square in it.
-            const horizontalSlack = imageRect.width - size;
-            const verticalSlack = imageRect.height - size;
+            if (deltaX > 0) {
+                position.left += this._getPositionWithLimit(deltaX, availableSpace.toRight);
+            }
 
-            console.log("Horizontal slack: ", horizontalSlack);
-            console.log("Vertical slack", verticalSlack);     
-            console.log("size : ", size);
+            if (deltaX < 0) {
+                position.left -= this._getPositionWithLimit(-deltaX, availableSpace.toLeft);
+            }
 
-            // Drift is how much the box needs to move relative to the imageRect so that both
-            // are aligned. This is the starting point for positioning the red square aligned
-            // and center to the image
-            const horizontalDrift = cropBoxRect.left - imageRect.left;
-            const verticalDrift = cropBoxRect.top - imageRect.top;
+            if (deltaY > 0) {
+                position.top += this._getPositionWithLimit(deltaY, availableSpace.toBottom);
+            }
 
-            console.log("Horizontal drift: ", horizontalDrift);
-            console.log("Vertical drift: ", verticalDrift);
+            if (deltaY < 0) {
+                position.top -= this._getPositionWithLimit(-deltaY, availableSpace.toTop);
+            }
 
-            const cropBoxStyle = window.getComputedStyle(this.cropBoxElement);
+            this._setNormalizedDeltas(deltaX, deltaY);
 
-            console.log("style left text : ", cropBoxStyle.left);
-            console.log("Style top string : ", cropBoxStyle.top);
-
-            const currentLeft = parseFloat(cropBoxStyle.left.replace('px', ''));
-            const currentTop = parseFloat(cropBoxStyle.top.replace('px', ''));
-
-            // Current left and top are used to understand where the square gets loaded within the dom
-            // this is important because that's the starting point for all positions for the cropBox. 
-            // absolute positioning is not possible, because we can only modify the style component of
-            // the element, not really the absolute posittioning
-            console.log("Current left: ", currentLeft);
-            console.log("current top : ", currentTop);
-
-            const properties: CropBoxPosition = {
-                left: (currentLeft - horizontalDrift) + horizontalSlack/2,
-                top: (currentTop - verticalDrift) + verticalSlack/2,
-                size: size
-            };
-
-            return properties;
+            this.refreshPosition();
         }
 
-        setPosition(position: CropBoxPosition) {
+        refreshPosition() {
+            const position = this._getCurrentPosition();
 
-            console.log(position)
+            this._setPosition(position);
 
-            this.log()
-
-            // Position the crop box relative to the image
-            this.cropBoxElement.style.width = `${position.size}px`;
-            this.cropBoxElement.style.height = `${position.size}px`;
-            this.cropBoxElement.style.left = `${position.left}px`;
-            this.cropBoxElement.style.top = `${position.top}px`;
-
-            this.log()
+            // this.normalizedDeltaX = 0;
+            // this.normalizedDeltaY = 0;
         }
 
         unhide() {
@@ -150,25 +139,200 @@ const { imageId } = Astro.props;
         log() {
             (window as any).debugCropElements();
         }
+
+        _setNormalizedDeltas(deltaX: number, deltaY: number) {
+            const imageRect = this.imagePreviewElement.getBoundingClientRect()
+
+            let currentDeltaX = this.normalizedDeltaX * imageRect.width;
+            let currentDeltaY = this.normalizedDeltaY * imageRect.height;
+
+            currentDeltaX += deltaX;
+            currentDeltaY += deltaY;
+
+            this.normalizedDeltaX = (currentDeltaX / imageRect.width);
+            this.normalizedDeltaY = (currentDeltaY / imageRect.height);
+            
+            // console.log("Set normalized deltas");
+            // console.log("Normalized deltaX " + this.normalizedDeltaX);
+            // console.log("Normalized deltaY ", this.normalizedDeltaY);
+        }
+
+        _getCurrentPosition() {
+            let position = this._getCenterPosition();
+
+            const imageRect = this.imagePreviewElement.getBoundingClientRect()
+
+            // console.log("Original position before deltas:");
+            // console.log("Left: ", position.left);
+            // console.log("Top: ", position.top);
+
+            position.left += (this.normalizedDeltaX * imageRect.width);
+            position.top += (this.normalizedDeltaY * imageRect.height);
+
+            // console.log("Position after applying deltas:");
+            // console.log("Left: ", position.left);
+            // console.log("Top: ", position.top);
+
+            return position;
+        }
+
+        _getPositionWithLimit(delta: number, availableSpace: number) {
+
+            return delta;
+
+            if ( availableSpace > delta) {
+                return delta;
+            }
+
+            return availableSpace;
+        }
+
+        _getCenterPosition() {
+            const imageRect = this.imagePreviewElement.getBoundingClientRect()
+            const cropBoxRect = this.cropBoxElement.getBoundingClientRect()
+
+            const size = Math.min(imageRect.width, imageRect.height);
+
+            // console.log("Height of the image is : ", imageRect.height);
+            // console.log("Width of the image is : ", imageRect.width);
+            // console.log("left of the image is : ", imageRect.left);
+            // console.log("top of the image is : ", imageRect.top);     
+
+            // Slack is how much room the square red box can move horizontally or vertically within the
+            // image. This is required to get center position, because depending on the slack, we 
+            // will center the red square in it.
+            const horizontalSlack = imageRect.width - size;
+            const verticalSlack = imageRect.height - size;
+
+            // console.log("Horizontal slack: ", horizontalSlack);
+            // console.log("Vertical slack", verticalSlack);     
+            // console.log("size : ", size);
+
+            // Drift is how much the box needs to move relative to the imageRect so that both
+            // are aligned. This is the starting point for positioning the red square aligned
+            // and center to the image
+            const horizontalDrift = cropBoxRect.left - imageRect.left;
+            const verticalDrift = cropBoxRect.top - imageRect.top;
+
+            // console.log("Horizontal drift: ", horizontalDrift);
+            // console.log("Vertical drift: ", verticalDrift);
+
+            const cropBoxStyle = window.getComputedStyle(this.cropBoxElement);
+
+            // console.log("style left text : ", cropBoxStyle.left);
+            // console.log("Style top string : ", cropBoxStyle.top);
+
+            const currentLeft = parseFloat(cropBoxStyle.left.replace('px', ''));
+            const currentTop = parseFloat(cropBoxStyle.top.replace('px', ''));
+
+            // Current left and top are used to understand where the square gets loaded within the dom
+            // this is important because that's the starting point for all positions for the cropBox. 
+            // absolute positioning is not possible, because we can only modify the style component of
+            // the element, not really the absolute posittioning
+            // console.log("Current left: ", currentLeft);
+            // console.log("current top : ", currentTop);
+
+            const properties: CropBoxPosition = {
+                left: (currentLeft - horizontalDrift) + horizontalSlack/2,
+                top: (currentTop - verticalDrift) + verticalSlack/2,
+                size: size
+            };
+
+            return properties;
+        }
+
+        _getPossibleSpace() {
+            const imageRect = this.imagePreviewElement.getBoundingClientRect()
+            const cropBoxRect = this.cropBoxElement.getBoundingClientRect()
+
+            // vertical is increased from top to bottom
+            // horizontal is increased from left to right
+            // in order for possible space to always be positive, then we need to take that order in consideration
+            const availableSpace: AvailableSpace = {
+                toLeft: cropBoxRect.left - imageRect.left,
+                toTop: cropBoxRect.top - imageRect.top,
+                toBottom: imageRect.bottom - cropBoxRect.bottom,
+                toRight: imageRect.right - cropBoxRect.right
+            }
+
+            //console.log("Available space:");
+            //console.log(availableSpace);
+
+            return availableSpace;
+        }
+
+        _setPosition(position: CropBoxPosition) {
+            //console.log(position)
+
+            //this.log();
+
+            // Position the crop box relative to the image
+            this.cropBoxElement.style.width = `${position.size}px`;
+            this.cropBoxElement.style.height = `${position.size}px`;
+            this.cropBoxElement.style.left = `${position.left}px`;
+            this.cropBoxElement.style.top = `${position.top}px`;
+
+            // this.log();
+        }
     }
+
+    class MouseHandler {
+        isDragging: boolean;
+        currentDeltax: number;
+        currentDeltay: number;
+
+        currentX: number;
+        currentY: number;
+
+        cropBoxHandler: CropboxHandler;
+
+        constructor(cropBoxHandler: CropboxHandler) {
+            this.isDragging = false;
+            this.currentDeltax = 0;
+            this.currentDeltay = 0;
+
+            this.currentX = 0;
+            this.currentY = 0;
+
+            this.cropBoxHandler = cropBoxHandler;
+        }
+
+        handleMouseDown(e: MouseEvent) {
+            this.isDragging = true;
+
+            this.currentX = e.clientX;
+            this.currentY = e.clientY;
+        }
+
+        handleMouseMove(e: MouseEvent) {
+            if (!this.isDragging) {
+                return;
+            }
+
+            this.currentDeltax = e.clientX - this.currentX;
+            this.currentDeltay = e.clientY - this.currentY;
+
+            this.currentX = e.clientX;
+            this.currentY = e.clientY;
+
+            this.cropBoxHandler.applyDelta(this.currentDeltax, this.currentDeltay);
+        }
+
+        handleMouseUp() {
+            this.isDragging = false;
+        }
+    }
+
+    let cropBoxHandler: CropboxHandler | null = null;
+    let mouseHandler: MouseHandler | null = null;
+
+    let currentImageId: string | null = null;
+    let selectedRatio: number | null = null;
 
     let cropModal: HTMLElement | null = null;
     let cropPreview: HTMLImageElement | null = null;
     let cropBox: HTMLElement | null = null;
     let cropOverlay: HTMLElement | null = null;
-    let currentImageId: string | null = null;
-    let selectedRatio: number | null = null;
-    let isDragging = false;
-    let startX = 0;
-    let startY = 0;
-    let cropBoxLeft = 0;
-    let cropBoxTop = 0;
-
-    type CropBoxPosition = {
-        left: number;
-        top: number;
-        size: number;
-    };
 
     function updateButtonStyles(selectedButton: HTMLElement) {
         // Reset all buttons to default style
@@ -183,45 +347,28 @@ const { imageId } = Astro.props;
     }
 
     function initializeCropBox() {
-        if (!cropBox || !cropPreview) return;
+        if (!cropBoxHandler) return;
         
-        const handler = new CropboxHandler(cropPreview, cropBox);
-
-        const targetPosition = handler.getCenterPosition();
-        handler.setPosition(targetPosition);
-        handler.unhide();
+        cropBoxHandler.refreshPosition();
+        cropBoxHandler.unhide();
     }
 
     function handleMouseDown(e: MouseEvent) {
-        if (!cropBox || !cropPreview) return;
+        if (!mouseHandler) return;
         
-        const rect = cropBox.getBoundingClientRect();
+        mouseHandler.handleMouseDown(e);
     }
 
     function handleMouseMove(e: MouseEvent) {
-        if (!isDragging || !cropBox || !cropPreview) return;
+        if (!mouseHandler) return;
         
-        const imageRect = cropPreview.getBoundingClientRect();
-        const cropBoxRect = cropBox.getBoundingClientRect();        
-        
-        const deltaX = e.clientX - startX;
-        const deltaY = e.clientY - startY;
-        
-        let newLeft = cropBoxLeft + deltaX;
-        let newTop = cropBoxTop + deltaY;
-        
-        // Constrain to image bounds
-        // newLeft = Math.max(0, Math.min(newLeft, imageRect.width - cropBox.offsetWidth));
-        // newTop = Math.max(0, Math.min(newTop, imageRect.height - cropBox.offsetHeight));
-        
-        // cropBox.style.left = `${newLeft}px`;
-        //cropBox.style.top = `${newTop}px`;
+        mouseHandler.handleMouseMove(e);
     }
 
     function handleMouseUp() {
-        if (!cropBox) return;
-        isDragging = false;
-        cropBox.style.cursor = 'grab';
+        if (!mouseHandler) return;
+
+        mouseHandler.handleMouseUp();
     }
 
     async function applyCrop() {
@@ -405,6 +552,11 @@ const { imageId } = Astro.props;
         button1024?.addEventListener('click', () => updateRatio(1024, button1024!));
 
         // Mouse event handlers for crop box
+        if (cropBox) {
+            cropBoxHandler = new CropboxHandler(cropPreview, cropBox);
+            mouseHandler = new MouseHandler(cropBoxHandler);
+        }
+
         cropBox?.addEventListener('mousedown', handleMouseDown);
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
