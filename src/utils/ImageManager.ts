@@ -13,6 +13,7 @@ export interface ImageMetadata {
     filename: string;
     size: number;
     created: string;
+    collection_name?: string;
 }
 
 export class ImageData {
@@ -80,8 +81,12 @@ export class ImageData {
         return this.metadata.created;
     }
 
+    getMetadata(): ImageMetadata {
+        return this.metadata;
+    }
+
     getProperties(): ImageProperties {
-        return { ...this.properties };
+        return this.properties;
     }
 
     async getCaption(): Promise<string> {
@@ -125,6 +130,7 @@ export class ImageData {
 export class ImageManager {
     private static instance: ImageManager;
     private images: Map<string, ImageData> = new Map();
+    private imageSequence: string[] = []; // Array to maintain image order
     private baseUrl: string = API_BASE_URL;
 
     private constructor() {}
@@ -144,7 +150,23 @@ export class ImageManager {
         const image = new ImageData(metadata);
         await image.initialize();
         this.images.set(metadata.id, image);
+        // Only add to sequence if not already present
+        if (!this.imageSequence.includes(metadata.id)) {
+            this.imageSequence.push(metadata.id);
+        }
         return image;
+    }
+
+    // New method to set the image sequence
+    setImageSequence(imageIds: string[]): void {
+        // Filter out any IDs that don't exist in our images map
+        const validIds = imageIds.filter(id => this.images.has(id));
+        this.imageSequence = validIds;
+    }
+
+    // New method to get the current sequence
+    getImageSequence(): string[] {
+        return [...this.imageSequence];
     }
 
     getImage(id: string): ImageData | undefined {
@@ -172,6 +194,31 @@ export class ImageManager {
 
     clearSelection() {
         this.images.forEach(img => img.setSelected(false));
+    }
+
+    // Updated navigation methods to use the sequence
+    getNextImage(currentId: string): ImageData | undefined {
+        const currentIndex = this.imageSequence.indexOf(currentId);
+        if (currentIndex === -1 || currentIndex === this.imageSequence.length - 1) {
+            return undefined;
+        }
+        return this.images.get(this.imageSequence[currentIndex + 1]);
+    }
+
+    getPreviousImage(currentId: string): ImageData | undefined {
+        const currentIndex = this.imageSequence.indexOf(currentId);
+        if (currentIndex <= 0) {
+            return undefined;
+        }
+        return this.images.get(this.imageSequence[currentIndex - 1]);
+    }
+
+    getImageIndex(id: string): number {
+        return this.imageSequence.indexOf(id);
+    }
+
+    getTotalImages(): number {
+        return this.imageSequence.length;
     }
 
     async exportSelectedImages(): Promise<void> {

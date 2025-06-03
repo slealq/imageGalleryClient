@@ -2,10 +2,11 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import type { ImageData, Row } from '../types/gallery';
 import { processImages } from '../utils/imageProcessing';
 import { fetchImages } from '../utils/api';
-import { ImageManager } from '../utils/ImageManager';
+import { ImageManager, ImageData as ManagerImageData } from '../utils/ImageManager';
+import type { ImageData as GalleryImageData } from '../types/gallery';
 
 interface GalleryReactProps {
-  initialImages: ImageData[];
+  initialImages: GalleryImageData[];
   initialTotalPages: number;
 }
 
@@ -17,89 +18,95 @@ declare global {
 }
 
 const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotalPages }) => {
-  const [rows, setRows] = useState<Row[]>([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasMorePages, setHasMorePages] = useState(true);
-  const [totalPages, setTotalPages] = useState(initialTotalPages);
+  const [images, setImages] = useState<ManagerImageData[]>([]);
   const [selectedCount, setSelectedCount] = useState(0);
-  const imageManagerRef = useRef<ImageManager | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const imageManager = useRef<ImageManager>(ImageManager.getInstance());
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastImageRef = useRef<HTMLDivElement | null>(null);
 
-  // Initialize ImageManager
-  useEffect(() => {
-    imageManagerRef.current = ImageManager.getInstance();
+  // Function to update image order in ImageManager
+  const updateImageManagerSequence = useCallback((newImages: ManagerImageData[]) => {
+    const imageIds = newImages.map(img => img.getId());
+    imageManager.current.setImageSequence(imageIds);
   }, []);
+
+  const loadImages = useCallback(async (pageNum: number) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await fetchImages(pageNum);
+      
+      // Create ImageData objects and add them to ImageManager
+      const newImages = await Promise.all(
+        response.images.map(async (img: GalleryImageData) => {
+          const imageData = await imageManager.current.createImageFromUrl(
+            img.url || '',
+            img.id,
+            img.filename,
+            img.size,
+            img.created_at
+          );
+          return imageData;
+        })
+      );
+
+      // Update the sequence in ImageManager
+      updateImageManagerSequence(newImages);
+
+      setImages(prevImages => {
+        const updatedImages = pageNum === 1 ? newImages : [...prevImages, ...newImages];
+        return updatedImages;
+      });
+      
+      setHasMore(response.page < response.total_pages);
+      setPage(pageNum);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load images');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [updateImageManagerSequence]);
 
   // Initialize images in ImageManager
   useEffect(() => {
-    if (!imageManagerRef.current) return;
+    if (!imageManager.current) return;
 
     const initializeImages = async () => {
+      const newImages: ManagerImageData[] = [];
       for (const image of initialImages) {
         try {
-          await imageManagerRef.current?.createImageFromUrl(
-            imageManagerRef.current.getImageUrl(image.id),
+          const imageData = await imageManager.current.createImageFromUrl(
+            imageManager.current.getImageUrl(image.id),
             image.id,
             image.filename,
             image.size,
             image.created_at
           );
-        } catch (error) {
-          console.error(`Error initializing image ${image.id}:`, error);
-        }
-      }
-    };
-
-    initializeImages();
-  }, [initialImages]);
-
-  // Process initial images into rows
-  useEffect(() => {
-    const initialRows = processImages(initialImages);
-    setRows(initialRows);
-  }, [initialImages]);
-
-  const loadMoreImages = useCallback(async (): Promise<boolean> => {
-    if (isLoading || !hasMorePages || !imageManagerRef.current) return false;
-    if (currentPage >= totalPages) {
-      setHasMorePages(false);
-      return false;
-    }
-    
-    setIsLoading(true);
-    try {
-      const nextPage = currentPage + 1;
-      const { images: newImages, total_pages } = await fetchImages(nextPage, 20);
-
-      if (!newImages || newImages.length === 0) {
-        setHasMorePages(false);
-        return false;
-      }
-
-      if (total_pages) {
-        setTotalPages(total_pages);
-      }
-
-      // Add new images to ImageManager
-      for (const image of newImages) {
-        try {
-          await imageManagerRef.current.createImageFromUrl(
-            imageManagerRef.current.getImageUrl(image.id),
-            image.id,
-            image.filename,
-            image.size,
-            image.created_at
-          );
+          newImages.push(imageData);
         } catch (error) {
           console.error(`Error loading image ${image.id}:`, error);
         }
       }
+      setImages(newImages);
+      updateImageManagerSequence(newImages);
+    };
 
-      const newRows = processImages(newImages);
-      setRows(prevRows => [...prevRows, ...newRows]);
-      setCurrentPage(nextPage);
+    initializeImages();
+  }, [initialImages, updateImageManagerSequence]);
+
+  const loadMoreImages = useCallback(async (): Promise<boolean> => {
+    if (isLoading || !hasMore) return false;
+    
+    setIsLoading(true);
+    try {
+      const nextPage = page + 1;
+      await loadImages(nextPage);
       return true;
     } catch (error) {
       console.error('Error loading more images:', error);
@@ -107,7 +114,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, hasMorePages, isLoading, totalPages]);
+  }, [isLoading, hasMore, page, loadImages]);
 
   // Expose loadMoreImages through window
   useEffect(() => {
@@ -121,10 +128,10 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
 
   // Update selected count when selection changes
   useEffect(() => {
-    if (!imageManagerRef.current) return;
+    if (!imageManager.current) return;
 
     const updateSelectedCount = () => {
-      const selectedImages = imageManagerRef.current?.getSelectedImages() || [];
+      const selectedImages = imageManager.current?.getSelectedImages() || [];
       setSelectedCount(selectedImages.length);
     };
 
@@ -141,9 +148,9 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !isLoading && hasMorePages) {
+        if (entries[0].isIntersecting && !isLoading && hasMore) {
           // Calculate how many images we've shown so far
-          const totalImagesShown = rows.reduce((sum, row) => sum + row.images.length, 0);
+          const totalImagesShown = images.length;
           // If we've shown more than 75% of the current page size (20), load more
           if (totalImagesShown > 15) {
             loadMoreImages();
@@ -166,15 +173,15 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
         observer.unobserve(loadingTrigger);
       }
     };
-  }, [loadMoreImages, isLoading, hasMorePages, rows]);
+  }, [loadMoreImages, isLoading, hasMore, images]);
 
   const handleExport = async () => {
-    if (!imageManagerRef.current || isExporting) return;
+    if (!imageManager.current || isExporting) return;
 
     setIsExporting(true);
     setExportError(null);
     try {
-      await imageManagerRef.current.exportSelectedImages();
+      await imageManager.current.exportSelectedImages();
     } catch (error) {
       console.error('Error exporting images:', error);
       setExportError(error instanceof Error ? error.message : 'Failed to export images');
@@ -183,37 +190,38 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
     }
   };
 
-  const handleImageClick = (image: ImageData) => {
-    if (!imageManagerRef.current) return;
+  const handleImageClick = (image: ManagerImageData) => {
+    if (!imageManager.current) return;
 
     // Log for debugging
-    console.log('Image clicked:', image);
-    console.log('Window openModal exists:', typeof window !== 'undefined' && !!window.openModal);
+    console.log('Image clicked:', {
+      id: image.getId(),
+      url: image.getUrl(),
+      filename: image.getMetadata().filename
+    });
 
     if (typeof window !== 'undefined' && window.openModal) {
-      const imageUrl = imageManagerRef.current.getImageUrl(image.id);
+      const imageUrl = image.getUrl();
       console.log('Opening modal with URL:', imageUrl);
       
       window.openModal(
         imageUrl,
-        image.filename,
-        image.size.toString(),
-        image.created_at,
-        image.id,
-        image.has_caption,
-        image.has_tags,
-        image.collection_name
+        image.getMetadata().filename,
+        image.getMetadata().size.toString(),
+        image.getMetadata().created,
+        image.getId(),
+        image.getProperties().has_caption,
+        image.getProperties().has_tags,
+        image.getMetadata().collection_name || ''
       );
-    } else {
-      console.error('openModal function not found on window object');
     }
   };
 
   const handleSelectionClick = (e: React.MouseEvent, imageId: string) => {
     e.stopPropagation();
-    if (!imageManagerRef.current) return;
+    if (!imageManager.current) return;
 
-    const image = imageManagerRef.current.getImage(imageId);
+    const image = imageManager.current.getImage(imageId);
     if (image) {
       const selected = !image.isSelected();
       image.setSelected(selected);
@@ -221,7 +229,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
   };
 
   return (
-    <div className="container mx-auto px-1 space-y-2">
+    <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-4">
         <button
           type="button"
@@ -230,106 +238,76 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
         >
           Open Drawer
         </button>
-        {selectedCount > 0 && (
-          <div className="flex flex-col items-end gap-2">
-            {exportError && (
-              <div className="text-red-500 text-sm">
-                {exportError}
-              </div>
-            )}
-            <div className="flex items-center gap-4">
-              <div className="text-white">
-                Selected: <span id="selected-count">{selectedCount}</span>
-              </div>
-              <button
-                id="export-button"
-                className={`px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                  isExporting ? 'bg-gray-400 cursor-not-allowed' : ''
-                }`}
-                onClick={handleExport}
-                disabled={isExporting}
-              >
-                {isExporting ? 'Exporting...' : 'Export Selected'}
-              </button>
-              <button
-                id="clear-selection-button"
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                onClick={() => {
-                  if (window.imageManager) {
-                    window.imageManager.clearSelection();
-                    // Update the selected count
-                    const selectedCount = document.getElementById('selected-count');
-                    if (selectedCount) {
-                      selectedCount.textContent = '0';
-                    }
-                  }
-                }}
-              >
-                Clear Selection
-              </button>
-            </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-medium text-gray-700">Selected:</span>
+            <span className="text-lg font-bold text-indigo-600">{selectedCount}</span>
           </div>
-        )}
-      </div>
-
-      <div id="gallery-grid" className="flex flex-col gap-2">
-        {rows.map((row, rowIndex) => (
-          <div
-            key={rowIndex}
-            className={`grid gap-1 ${
-              row.type === 'landscape'
-                ? 'grid-cols-1 sm:grid-cols-2'
-                : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'
+          <button
+            onClick={handleExport}
+            disabled={selectedCount === 0 || isExporting}
+            className={`px-4 py-2 rounded-lg text-white font-medium ${
+              selectedCount === 0 || isExporting
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
-            {row.images.map((img) => {
-              const image = imageManagerRef.current?.getImage(img.id);
-              const isSelected = image?.isSelected() || false;
-              const imageUrl = image?.getUrl() || imageManagerRef.current?.getImageUrl(img.id);
-              
-              return (
-                <div
-                  key={img.id}
-                  className="cursor-pointer overflow-hidden flex items-center justify-center bg-black/20 backdrop-blur-sm p-1 group rounded-sm relative"
-                  onClick={() => handleImageClick(img)}
-                  data-id={img.id}
+            {isExporting ? 'Exporting...' : 'Export Selected'}
+          </button>
+          {exportError && (
+            <div className="text-red-500 text-sm">{exportError}</div>
+          )}
+        </div>
+      </div>
+
+      {error && (
+        <div className="text-red-500 mb-4">{error}</div>
+      )}
+
+      <div id="gallery-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">
+        {images.map((image, index) => {
+          const isSelected = image.isSelected();
+          const imageUrl = image.getUrl();
+          const metadata = image.getMetadata();
+          
+          return (
+            <div
+              key={metadata.id}
+              ref={index === images.length - 1 ? lastImageRef : null}
+              className="relative group"
+              onClick={() => handleImageClick(image)}
+            >
+              <div className="aspect-square relative overflow-hidden">
+                <img
+                  src={imageUrl}
+                  alt={metadata.filename}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+                <button
+                  onClick={(e) => handleSelectionClick(e, metadata.id)}
+                  className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 border-white transition-colors ${
+                    isSelected ? 'bg-green-500' : 'bg-black/50 hover:bg-black/70'
+                  }`}
                 >
-                  <button
-                    className={`absolute top-2 right-2 w-8 h-8 rounded-full border-2 border-white transition-colors z-10 ${
-                      isSelected ? 'bg-green-500' : 'bg-black/50 hover:bg-black/70'
-                    }`}
-                    onClick={(e) => handleSelectionClick(e, img.id)}
+                  <svg
+                    className={`w-full h-full text-white ${isSelected ? '' : 'hidden'}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    <svg className={`w-full h-full text-white ${isSelected ? '' : 'hidden'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </button>
-                  <div className="transition-all duration-300 ease-in-out group-hover:scale-110 group-hover:shadow-2xl">
-                    <img
-                      src={imageUrl}
-                      width={img.width * 0.5}
-                      height={img.height * 0.5}
-                      className="w-auto h-auto max-w-full max-h-full object-contain"
-                      loading="lazy"
-                      data-filename={img.filename}
-                      data-size={img.size}
-                      data-created={img.created_at}
-                      data-id={img.id}
-                      data-has-caption={img.has_caption}
-                      data-has-tags={img.has_tags}
-                      data-collection={img.collection_name}
-                      onError={(e) => {
-                        console.error(`Error loading image ${img.id}`);
-                        const target = e.target as HTMLImageElement;
-                        target.src = '/placeholder.png'; // Add a placeholder image
-                      }}
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
                     />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ))}
+                  </svg>
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
       <div id="loading-trigger" className="h-10 w-full" />
     </div>

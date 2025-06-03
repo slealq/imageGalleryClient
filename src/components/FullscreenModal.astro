@@ -1,7 +1,7 @@
 ---
 import CaptionModal from './CaptionModal.astro';
 import CropModal from './CropModal.astro';
-import { ImageManager } from '../utils/ImageManager';
+import { ImageManager, ImageData } from '../utils/ImageManager';
 
 interface Props {
     imageUrl?: string;
@@ -83,7 +83,7 @@ declare global {
 <CropModal imageId="" />
 
 <script>
-    import { ImageManager } from '../utils/ImageManager';
+    import { ImageManager, ImageData } from '../utils/ImageManager';
 
     class FullscreenHandler {
         private modal: HTMLElement | null = null;
@@ -100,12 +100,15 @@ declare global {
         private isLoadingMore: boolean = false;
         private currentImageId: string | null = null;
         private imageManager: ImageManager;
+        private isCaptionModalOpen: boolean = false;
+        private isCropModalOpen: boolean = false;
 
         constructor() {
             this.imageManager = window.imageManager;
             this.initializeElements();
             this.setupEventListeners();
             this.exposeOpenModal();
+            this.setupModalStateObservers();
         }
 
         private initializeElements(): void {
@@ -119,6 +122,67 @@ declare global {
             this.cropButton = document.getElementById('modal-crop-button');
             this.selectionButton = document.getElementById('modal-selection-button');
             this.imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
+        }
+
+        private setupModalStateObservers(): void {
+            // Observe caption modal
+            const captionModal = document.getElementById('caption-modal');
+            if (captionModal) {
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.attributeName === 'class') {
+                            this.isCaptionModalOpen = !captionModal.classList.contains('hidden');
+                        }
+                    });
+                });
+                observer.observe(captionModal, { attributes: true });
+            }
+
+            // Observe crop modal
+            const cropModal = document.getElementById('crop-modal');
+            if (cropModal) {
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.attributeName === 'class') {
+                            this.isCropModalOpen = !cropModal.classList.contains('hidden');
+                        }
+                    });
+                });
+                observer.observe(cropModal, { attributes: true });
+            }
+        }
+
+        private handleKeyDown(e: KeyboardEvent): void {
+            // If any modal is open, only handle Escape key
+            if (this.isCaptionModalOpen || this.isCropModalOpen) {
+                if (e.key === 'Escape') {
+                    this.closeModal();
+                }
+                return;
+            }
+
+            // Handle keyboard events when no modal is open
+            switch (e.key) {
+                case 'Escape':
+                    this.closeModal();
+                    break;
+                case 'ArrowLeft':
+                    this.navigateImage('prev');
+                    break;
+                case 'ArrowRight':
+                    this.navigateImage('next');
+                    break;
+                case 'c':
+                    if (this.currentImageId) {
+                        (window as any).openCaptionModal(this.currentImageId);
+                    }
+                    break;
+                case 'r':
+                    if (this.currentImageId) {
+                        (window as any).openCropModal(this.currentImageId);
+                    }
+                    break;
+            }
         }
 
         private setupEventListeners(): void {
@@ -147,16 +211,6 @@ declare global {
             });
 
             this.selectionButton?.addEventListener('click', this.handleSelectionClick.bind(this));
-        }
-
-        private handleKeyDown(e: KeyboardEvent): void {
-            if (e.key === 'Escape') {
-                this.closeModal();
-            } else if (e.key === 'ArrowLeft') {
-                this.navigateImage('prev');
-            } else if (e.key === 'ArrowRight') {
-                this.navigateImage('next');
-            }
         }
 
         private handleSelectionClick(e: Event): void {
@@ -217,56 +271,54 @@ declare global {
         }
 
         private async navigateImage(direction: 'next' | 'prev'): Promise<void> {
-            if (this.currentImageIndex === -1) return;
-            
-            let newIndex = direction === 'next' 
-                ? Math.min(this.currentImageIndex + 1, this.imageElements.length - 1)
-                : Math.max(this.currentImageIndex - 1, 0);
-                
-            if (direction === 'next' && this.currentImageIndex === this.imageElements.length - 1 && !this.isLoadingMore) {
-                this.isLoadingMore = true;
-                try {
-                    if (window.loadMoreImages) {
-                        const success = await window.loadMoreImages();
-                        if (success) {
-                            this.imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
-                            if (this.currentImageIndex < this.imageElements.length - 1) {
-                                newIndex = this.currentImageIndex + 1;
+            if (!this.currentImageId) return;
+
+            const nextImage = direction === 'next' 
+                ? this.imageManager.getNextImage(this.currentImageId)
+                : this.imageManager.getPreviousImage(this.currentImageId);
+
+            if (!nextImage) {
+                // If we're at the end and trying to go next, try to load more
+                if (direction === 'next' && !this.isLoadingMore) {
+                    this.isLoadingMore = true;
+                    try {
+                        if (window.loadMoreImages) {
+                            const success = await window.loadMoreImages();
+                            if (success) {
+                                // Try navigation again after loading more
+                                const newNextImage = this.imageManager.getNextImage(this.currentImageId);
+                                if (newNextImage) {
+                                    this.updateModalContent(newNextImage);
+                                }
                             }
                         }
+                    } finally {
+                        this.isLoadingMore = false;
                     }
-                } finally {
-                    this.isLoadingMore = false;
                 }
+                return;
             }
-                
-            if (newIndex !== this.currentImageIndex) {
-                this.currentImageIndex = newIndex;
-                const img = this.imageElements[this.currentImageIndex];
-                const imageId = img.getAttribute('data-id');
-                
-                if (imageId) {
-                    const image = this.imageManager.getImage(imageId);
-                    if (image) {
-                        this.currentImageId = imageId;
-                        
-                        if (this.modalImage) {
-                            this.modalImage.src = image.getUrl();
-                        }
-                        if (this.modalFilename) this.modalFilename.textContent = image.getFilename();
-                        if (this.modalSize) this.modalSize.textContent = this.formatFileSize(image.getSize());
-                        if (this.modalCreated) this.modalCreated.textContent = this.formatDate(image.getCreated());
-                        if (this.modalCollection) this.modalCollection.textContent = img.getAttribute('data-collection') || '';
 
-                        this.updateStatuses(imageId);
+            this.updateModalContent(nextImage);
+        }
 
-                        // If caption modal is open, update it with the new image's caption
-                        const captionModal = document.getElementById('caption-modal');
-                        if (captionModal && !captionModal.classList.contains('hidden')) {
-                            (window as any).openCaptionModal(imageId);
-                        }
-                    }
-                }
+        private updateModalContent(image: ImageData): void {
+            this.currentImageId = image.getId();
+            
+            if (this.modalImage) {
+                this.modalImage.src = image.getUrl();
+            }
+            if (this.modalFilename) this.modalFilename.textContent = image.getFilename();
+            if (this.modalSize) this.modalSize.textContent = this.formatFileSize(image.getSize());
+            if (this.modalCreated) this.modalCreated.textContent = this.formatDate(image.getCreated());
+            if (this.modalCollection) this.modalCollection.textContent = image.getMetadata().collection_name || '';
+
+            this.updateStatuses(image.getId());
+
+            // If caption modal is open, update it with the new image's caption
+            const captionModal = document.getElementById('caption-modal');
+            if (captionModal && !captionModal.classList.contains('hidden')) {
+                (window as any).openCaptionModal(image.getId());
             }
         }
 
