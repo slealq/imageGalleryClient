@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://192.168.68.59:4322';
+const API_BASE_URL = 'http://192.168.68.53:4322';
 
 export interface ImageData {
     id: string;

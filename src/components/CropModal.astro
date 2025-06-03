@@ -34,10 +34,14 @@ const { imageId } = Astro.props;
             </div>
         </div>
         
-        <div class="flex-1 relative bg-gray-800 rounded-lg overflow-hidden">
-            <img id="crop-preview" src="" alt="" class="w-full h-full object-contain" />
-            <div id="crop-overlay" class="absolute inset-0 pointer-events-none">
-                <div id="crop-box" class="absolute border-2 border-red-500 bg-red-500/20 hidden"></div>
+        <div class="flex-1 relative bg-gray-800 rounded-lg overflow-hidden min-h-0">
+            <div class="absolute inset-0 flex items-center justify-center">
+                <div class="relative w-full h-full flex items-center justify-center">
+                    <div class="inline-block">
+                        <img id="crop-preview" src="" alt="" class="max-w-full max-h-full object-contain" />
+                        <div id="crop-box" class="absolute max-w-full max-h-full object-contain border-2 border-red-500 bg-red-500/20"></div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -55,6 +59,101 @@ const { imageId } = Astro.props;
 <script>
     import { getImageUrl, getImagePreviewUrl, cropImage } from '../utils/api';
 
+    class CropboxHandler {
+        imagePreviewElement: HTMLImageElement;
+        cropBoxElement: HTMLElement;
+
+        constructor(
+            imagePreviewElement: HTMLImageElement,
+            cropBoxElement: HTMLElement) {
+            this.imagePreviewElement = imagePreviewElement;
+            this.cropBoxElement = cropBoxElement;
+        }
+
+        getCenterPosition() {
+            const imageRect = this.imagePreviewElement.getBoundingClientRect()
+            const cropBoxRect = this.cropBoxElement.getBoundingClientRect()
+
+            const size = Math.min(imageRect.width, imageRect.height);
+
+            console.log("Height of the image is : ", imageRect.height);
+            console.log("Width of the image is : ", imageRect.width);
+            console.log("left of the image is : ", imageRect.left);
+            console.log("top of the image is : ", imageRect.top);     
+
+            // Slack is how much room the square red box can move horizontally or vertically within the
+            // image. This is required to get center position, because depending on the slack, we 
+            // will center the red square in it.
+            const horizontalSlack = imageRect.width - size;
+            const verticalSlack = imageRect.height - size;
+
+            console.log("Horizontal slack: ", horizontalSlack);
+            console.log("Vertical slack", verticalSlack);     
+            console.log("size : ", size);
+
+            // Drift is how much the box needs to move relative to the imageRect so that both
+            // are aligned. This is the starting point for positioning the red square aligned
+            // and center to the image
+            const horizontalDrift = cropBoxRect.left - imageRect.left;
+            const verticalDrift = cropBoxRect.top - imageRect.top;
+
+            console.log("Horizontal drift: ", horizontalDrift);
+            console.log("Vertical drift: ", verticalDrift);
+
+            const cropBoxStyle = window.getComputedStyle(this.cropBoxElement);
+
+            console.log("style left text : ", cropBoxStyle.left);
+            console.log("Style top string : ", cropBoxStyle.top);
+
+            const currentLeft = parseFloat(cropBoxStyle.left.replace('px', ''));
+            const currentTop = parseFloat(cropBoxStyle.top.replace('px', ''));
+
+            // Current left and top are used to understand where the square gets loaded within the dom
+            // this is important because that's the starting point for all positions for the cropBox. 
+            // absolute positioning is not possible, because we can only modify the style component of
+            // the element, not really the absolute posittioning
+            console.log("Current left: ", currentLeft);
+            console.log("current top : ", currentTop);
+
+            const properties: CropBoxPosition = {
+                left: (currentLeft - horizontalDrift) + horizontalSlack/2,
+                top: (currentTop - verticalDrift) + verticalSlack/2,
+                size: size
+            };
+
+            return properties;
+        }
+
+        setPosition(position: CropBoxPosition) {
+
+            console.log(position)
+
+            this.log()
+
+            // Position the crop box relative to the image
+            this.cropBoxElement.style.width = `${position.size}px`;
+            this.cropBoxElement.style.height = `${position.size}px`;
+            this.cropBoxElement.style.left = `${position.left}px`;
+            this.cropBoxElement.style.top = `${position.top}px`;
+
+            this.log()
+        }
+
+        unhide() {
+            this.cropBoxElement.style.position = 'absolute';
+            this.cropBoxElement.style.display = 'block';
+            this.cropBoxElement.classList.remove('hidden');
+        }
+
+        hide() {
+            this.cropBoxElement.classList.add('hidden');
+        }
+
+        log() {
+            (window as any).debugCropElements();
+        }
+    }
+
     let cropModal: HTMLElement | null = null;
     let cropPreview: HTMLImageElement | null = null;
     let cropBox: HTMLElement | null = null;
@@ -66,6 +165,12 @@ const { imageId } = Astro.props;
     let startY = 0;
     let cropBoxLeft = 0;
     let cropBoxTop = 0;
+
+    type CropBoxPosition = {
+        left: number;
+        top: number;
+        size: number;
+    };
 
     function updateButtonStyles(selectedButton: HTMLElement) {
         // Reset all buttons to default style
@@ -80,52 +185,45 @@ const { imageId } = Astro.props;
     }
 
     function initializeCropBox() {
-        if (!cropBox || !cropOverlay) return;
+        if (!cropBox || !cropPreview) return;
         
-        const overlayRect = cropOverlay.getBoundingClientRect();
-        const size = Math.min(overlayRect.width, overlayRect.height) * 0.8;
-        
-        cropBox.style.width = `${size}px`;
-        cropBox.style.height = `${size}px`;
-        cropBox.style.left = `${(overlayRect.width - size) / 2}px`;
-        cropBox.style.top = `${(overlayRect.height - size) / 2}px`;
-        cropBox.classList.remove('hidden');
+        const handler = new CropboxHandler(cropPreview, cropBox);
+
+        const targetPosition = handler.getCenterPosition();
+        handler.setPosition(targetPosition);
+        handler.unhide();
     }
 
     function handleMouseDown(e: MouseEvent) {
-        if (!cropBox) return;
+        if (!cropBox || !cropPreview) return;
         
         const rect = cropBox.getBoundingClientRect();
-        if (e.clientX >= rect.left && e.clientX <= rect.right &&
-            e.clientY >= rect.top && e.clientY <= rect.bottom) {
-            isDragging = true;
-            startX = e.clientX;
-            startY = e.clientY;
-            cropBoxLeft = rect.left;
-            cropBoxTop = rect.top;
-        }
     }
 
     function handleMouseMove(e: MouseEvent) {
-        if (!isDragging || !cropBox || !cropOverlay) return;
+        if (!isDragging || !cropBox || !cropPreview) return;
         
-        const overlayRect = cropOverlay.getBoundingClientRect();
+        const imageRect = cropPreview.getBoundingClientRect();
+        const cropBoxRect = cropBox.getBoundingClientRect();        
+        
         const deltaX = e.clientX - startX;
         const deltaY = e.clientY - startY;
         
         let newLeft = cropBoxLeft + deltaX;
         let newTop = cropBoxTop + deltaY;
         
-        // Constrain to overlay bounds
-        newLeft = Math.max(0, Math.min(newLeft, overlayRect.width - cropBox.offsetWidth));
-        newTop = Math.max(0, Math.min(newTop, overlayRect.height - cropBox.offsetHeight));
+        // Constrain to image bounds
+        // newLeft = Math.max(0, Math.min(newLeft, imageRect.width - cropBox.offsetWidth));
+        // newTop = Math.max(0, Math.min(newTop, imageRect.height - cropBox.offsetHeight));
         
-        cropBox.style.left = `${newLeft}px`;
-        cropBox.style.top = `${newTop}px`;
+        // cropBox.style.left = `${newLeft}px`;
+        //cropBox.style.top = `${newTop}px`;
     }
 
     function handleMouseUp() {
+        if (!cropBox) return;
         isDragging = false;
+        cropBox.style.cursor = 'grab';
     }
 
     async function applyCrop() {
@@ -180,12 +278,96 @@ const { imageId } = Astro.props;
         initializeCropBox();
     }
 
+    function debugElements() {
+        if (!cropBox || !cropPreview) {
+            console.log('Elements not found');
+            return;
+        }
+
+        const imageRect = cropPreview.getBoundingClientRect();
+        const cropBoxRect = cropBox.getBoundingClientRect();
+        const imageStyle = window.getComputedStyle(cropPreview);
+        const cropBoxStyle = window.getComputedStyle(cropBox);
+
+        console.log('=== DEBUG INFO ===');
+        console.log('Image:', {
+            element: cropPreview,
+            rect: imageRect,
+            style: {
+                width: imageStyle.width,
+                height: imageStyle.height,
+                position: imageStyle.position,
+                display: imageStyle.display,
+                margin: imageStyle.margin,
+                padding: imageStyle.padding,
+                transform: imageStyle.transform,
+                left: imageStyle.left,
+                top: imageStyle.top
+            },
+            offset: {
+                left: cropPreview.offsetLeft,
+                top: cropPreview.offsetTop,
+                width: cropPreview.offsetWidth,
+                height: cropPreview.offsetHeight
+            },
+            client: {
+                left: cropPreview.clientLeft,
+                top: cropPreview.clientTop,
+                width: cropPreview.clientWidth,
+                height: cropPreview.clientHeight
+            }
+        });
+
+        console.log('Crop Box:', {
+            element: cropBox,
+            rect: cropBoxRect,
+            style: {
+                width: cropBoxStyle.width,
+                height: cropBoxStyle.height,
+                position: cropBoxStyle.position,
+                display: cropBoxStyle.display,
+                margin: cropBoxStyle.margin,
+                padding: cropBoxStyle.padding,
+                transform: cropBoxStyle.transform,
+                left: cropBoxStyle.left,
+                top: cropBoxStyle.top,
+                border: cropBoxStyle.border
+            },
+            offset: {
+                left: cropBox.offsetLeft,
+                top: cropBox.offsetTop,
+                width: cropBox.offsetWidth,
+                height: cropBox.offsetHeight
+            },
+            client: {
+                left: cropBox.clientLeft,
+                top: cropBox.clientTop,
+                width: cropBox.clientWidth,
+                height: cropBox.clientHeight
+            }
+        });
+
+        console.log('Relative Positions:', {
+            cropBoxToImage: {
+                left: cropBoxRect.left - imageRect.left,
+                top: cropBoxRect.top - imageRect.top,
+                right: cropBoxRect.right - imageRect.right,
+                bottom: cropBoxRect.bottom - imageRect.bottom
+            }
+        });
+    }
+
     // Initialize modal elements
     document.addEventListener('DOMContentLoaded', () => {
         cropModal = document.getElementById('crop-modal');
         cropPreview = document.getElementById('crop-preview') as HTMLImageElement;
         cropBox = document.getElementById('crop-box');
         cropOverlay = document.getElementById('crop-overlay');
+
+        // Set initial cursor style
+        if (cropBox) {
+            cropBox.style.cursor = 'grab';
+        }
 
         // Close button handler
         document.getElementById('close-crop-modal')?.addEventListener('click', () => {
@@ -212,7 +394,7 @@ const { imageId } = Astro.props;
         button1024?.addEventListener('click', () => updateRatio(1024, button1024!));
 
         // Mouse event handlers for crop box
-        cropOverlay?.addEventListener('mousedown', handleMouseDown);
+        cropBox?.addEventListener('mousedown', handleMouseDown);
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
     });
@@ -232,4 +414,7 @@ const { imageId } = Astro.props;
         cropModal?.classList.remove('hidden');
         initializeCropBox();
     };
+
+    // Make debugElements available globally
+    (window as any).debugCropElements = debugElements;
 </script> 

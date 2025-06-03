@@ -3,14 +3,14 @@ import GalleryReact from './GalleryReact';
 import FullscreenModal from './FullscreenModal.astro';
 import Drawer from './Drawer.astro';
 import "../styles/global.css";
-import { processImages } from "../utils/imageProcessing";
+// import { processImages } from "../utils/imageProcessing";
 import { fetchImages } from "../utils/api";
 
 // Initial fetch with pagination
 const { images: imagesData, total_pages: initialTotalPages } = await fetchImages(1, 20);
 
 // Process images into rows
-const rows = processImages(imagesData);
+// const rows = processImages(imagesData);
 ---
 
 <div class="container mx-auto px-1 space-y-2">
