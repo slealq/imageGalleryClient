@@ -8,7 +8,7 @@ const { imageId } = Astro.props;
 
 <!-- Crop Modal -->
 <div id="crop-modal" class="fixed inset-0 bg-black/90 hidden z-[70] flex items-center justify-center">
-    <div class="bg-gray-900/90 rounded-lg p-6 w-full h-full flex flex-col">
+    <div class="relative w-full h-full flex flex-col">
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-xl font-semibold text-white">Crop Image</h2>
             <div class="flex items-center gap-4">
@@ -34,20 +34,22 @@ const { imageId } = Astro.props;
             </div>
         </div>
         
-        <div class="flex-1 relative bg-gray-800 rounded-lg overflow-hidden min-h-0">
-            <div id="modal-background" class="flex-1 flex items-center justify-center p-4 pb-20">
+        <div id="modal-background" class="flex-1 flex items-center justify-center p-4 pb-20">
+            <div class="relative">
                 <img id="crop-preview" src="" alt="" class="max-w-[95vw] max-h-[95vh] w-auto h-auto object-contain" />
-                <div id="crop-box" class="absolute max-w-full max-h-full object-contain border-2 border-red-500 bg-red-500/20"></div>
+                <div id="crop-box" class="absolute inset-0 border-2 border-red-500 bg-red-500/20"></div>
             </div>
         </div>
 
-        <div class="mt-4 flex justify-end gap-3">
-            <button id="cancel-crop" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium text-white">
-                Cancel
-            </button>
-            <button id="apply-crop" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium text-white">
-                Apply Crop
-            </button>
+        <div class="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm p-4">
+            <div class="flex justify-end gap-3">
+                <button id="cancel-crop" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium text-white">
+                    Cancel
+                </button>
+                <button id="apply-crop" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium text-white">
+                    Apply Crop
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -278,8 +280,8 @@ const { imageId } = Astro.props;
             const img = cropPreview;  // Create reference to avoid null checks
             img.onload = () => {
                 if (img) {  // Double check img still exists
-                    img.style.width = `${currentWidth}px`;
-                    img.style.height = `${currentHeight}px`;
+                    // img.style.width = `${currentWidth}px`;
+                    // img.style.height = `${currentHeight}px`;
                     initializeCropBox();
                 }
             };
