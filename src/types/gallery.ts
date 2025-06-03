@@ -6,8 +6,10 @@ export interface ImageData {
     width: number;
     height: number;
     has_caption: boolean;
-    has_tags: boolean;
     collection_name: string;
+    has_tags: boolean;
+    has_crop: boolean;
+    mime_type: string;
 }
 
 export interface Row {

@@ -79,6 +79,36 @@ const { imageUrl } = Astro.props;
         });
     }
 
+    function updateStatuses(imageId: string) {
+        const properties = window.getImageProperties?.(imageId);
+        const hasCaption = properties?.has_caption ?? false;
+        const hasTags = properties?.has_tags ?? false;
+        const hasCrop = properties?.has_crop ?? false;
+
+        console.log("Image ID:", imageId);
+        console.log("Properties:", {
+            hasCaption,
+            hasTags,
+            hasCrop
+        });
+
+        // Update caption status
+        const statusDot = document.querySelector('#caption-status .w-2');
+        const statusText = document.querySelector('#caption-status span:last-child');
+        if (statusDot && statusText) {
+            statusDot.className = `w-2 h-2 rounded-full ${hasCaption ? 'bg-green-500' : 'bg-red-500'}`;
+            statusText.textContent = hasCaption ? 'Has Caption' : 'No Caption';
+        }
+
+        // Update crop status
+        const cropStatusDot = document.querySelector('#crop-status .w-2');
+        const cropStatusText = document.querySelector('#crop-status span:last-child');
+        if (cropStatusDot && cropStatusText) {
+            cropStatusDot.className = `w-2 h-2 rounded-full ${hasCrop ? 'bg-green-500' : 'bg-red-500'}`;
+            cropStatusText.textContent = hasCrop ? 'Has Crop' : 'No Crop';
+        }
+    }
+
     async function navigateImage(direction: 'next' | 'prev') {
         if (currentImageIndex === -1) return;
         
@@ -115,10 +145,6 @@ const { imageUrl } = Astro.props;
             const size = img.getAttribute('data-size');
             const created = img.getAttribute('data-created');
             const imageId = img.getAttribute('data-id');
-            const hasCaption = img.getAttribute('data-has-caption') === 'true';
-            const hasTags = img.getAttribute('data-has-tags') === 'true';
-            const hasCrop = img.getAttribute('data-has-crop') === 'true';
-            const collectionName = img.getAttribute('data-collection');
             
             if (imageUrl && modalImage) modalImage.src = imageUrl;
             if (filename && modalFilename) modalFilename.textContent = filename;
@@ -126,20 +152,8 @@ const { imageUrl } = Astro.props;
             if (created && modalDate) modalDate.textContent = formatDate(created);
             if (imageId) currentImageId = imageId;
 
-            // Update caption status
-            const statusDot = document.querySelector('#caption-status .w-2');
-            const statusText = document.querySelector('#caption-status span:last-child');
-            if (statusDot && statusText) {
-                statusDot.className = `w-2 h-2 rounded-full ${hasCaption ? 'bg-green-500' : 'bg-red-500'}`;
-                statusText.textContent = hasCaption ? 'Has Caption' : 'No Caption';
-            }
-
-            // Update crop status
-            const cropStatusDot = document.querySelector('#crop-status .w-2');
-            const cropStatusText = document.querySelector('#crop-status span:last-child');
-            if (cropStatusDot && cropStatusText) {
-                cropStatusDot.className = `w-2 h-2 rounded-full ${hasCrop ? 'bg-green-500' : 'bg-red-500'}`;
-                cropStatusText.textContent = hasCrop ? 'Has Crop' : 'No Crop';
+            if (currentImageId) {
+                updateStatuses(currentImageId);
             }
 
             // If caption modal is open, update it with the new image's caption
@@ -181,22 +195,8 @@ const { imageUrl } = Astro.props;
         modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
 
-        // Update caption status
-        const statusDot = document.querySelector('#caption-status .w-2');
-        const statusText = document.querySelector('#caption-status span:last-child');
-        if (statusDot && statusText) {
-            statusDot.className = `w-2 h-2 rounded-full ${hasCaption ? 'bg-green-500' : 'bg-red-500'}`;
-            statusText.textContent = hasCaption ? 'Has Caption' : 'No Caption';
-        }
-
-        // Update crop status
-        const hasCrop = img?.getAttribute('data-has-crop') === 'true';
-        const cropStatusDot = document.querySelector('#crop-status .w-2');
-        const cropStatusText = document.querySelector('#crop-status span:last-child');
-        if (cropStatusDot && cropStatusText) {
-            cropStatusDot.className = `w-2 h-2 rounded-full ${hasCrop ? 'bg-green-500' : 'bg-red-500'}`;
-            cropStatusText.textContent = hasCrop ? 'Has Crop' : 'No Crop';
-        }
+        // Update statuses using properties cache
+        updateStatuses(imageId);
     }
 
     function closeModal() {

@@ -296,7 +296,13 @@ const { imageId } = Astro.props;
 
         // Check if image has a crop and update the fullscreen modal image
         try {
+            console.log("In the check if image has crop")
+
             const cropResponse = await getCrop(imageId);
+
+            console.log("Crop response:", cropResponse);
+
+
             const fullscreenImage = document.getElementById('modal-image') as HTMLImageElement;
             if (fullscreenImage) {
                 fullscreenImage.src = `${API_BASE_URL}${cropResponse.imageUrl}`;

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { ImageData, Row } from '../types/gallery';
 import { processImages } from '../utils/imageProcessing';
-import { fetchImages, getImageUrl } from '../utils/api';
+import { fetchImages, getImageUrl, type ImageData as ApiImageData } from '../utils/api';
 
 interface GalleryReactProps {
   initialImages: ImageData[];
@@ -10,6 +10,17 @@ interface GalleryReactProps {
 
 // Create a global image cache
 const imageCache = new Map<string, HTMLImageElement>();
+
+// Add properties cache
+const propertiesCache = new Map<string, { has_tags: boolean; has_crop: boolean; has_caption: boolean }>();
+
+// Expose cache through window
+declare global {
+    interface Window {
+        loadMoreImages?: () => Promise<boolean>;
+        getImageProperties?: (imageId: string) => { has_tags: boolean; has_crop: boolean; has_caption: boolean } | undefined;
+    }
+}
 
 // Function to preload an image
 const preloadImage = (imageId: string) => {
@@ -31,6 +42,12 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
   useEffect(() => {
     initialImages.forEach(image => {
       preloadImage(image.id);
+      // Initialize properties cache with initial images
+      propertiesCache.set(image.id, {
+        has_tags: image.has_tags,
+        has_crop: image.has_crop,
+        has_caption: image.has_caption
+      });
     });
   }, [initialImages]);
 
@@ -40,22 +57,21 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
     setRows(initialRows);
   }, [initialImages]);
 
-  const loadMoreImages = async () => {
-    if (isLoading || !hasMorePages) return;
+  const loadMoreImages = async (): Promise<boolean> => {
+    if (isLoading || !hasMorePages) return false;
     if (currentPage >= totalPages) {
       setHasMorePages(false);
-      return;
+      return false;
     }
-
+    
     setIsLoading(true);
-    const nextPage = currentPage + 1;
-
     try {
+      const nextPage = currentPage + 1;
       const { images: newImages, total_pages } = await fetchImages(nextPage, 20);
 
       if (!newImages || newImages.length === 0) {
         setHasMorePages(false);
-        return;
+        return false;
       }
 
       if (total_pages) {
@@ -65,12 +81,17 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
       // Preload new images
       newImages.forEach(image => {
         preloadImage(image.id);
+        // Update properties cache with new images
+        propertiesCache.set(image.id, {
+          has_tags: image.has_tags,
+          has_crop: image.has_crop,
+          has_caption: image.has_caption
+        });
       });
 
       const newRows = processImages(newImages);
       setRows(prevRows => [...prevRows, ...newRows]);
       setCurrentPage(nextPage);
-      
       return true;
     } catch (error) {
       console.error('Error loading more images:', error);
@@ -80,13 +101,14 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
     }
   };
 
-  // Expose loadMoreImages and imageCache to window
+  // Expose functions through window
   useEffect(() => {
-    (window as any).loadMoreImages = loadMoreImages;
-    (window as any).imageCache = imageCache;
+    window.loadMoreImages = loadMoreImages;
+    window.getImageProperties = (imageId: string) => propertiesCache.get(imageId);
+    
     return () => {
-      delete (window as any).loadMoreImages;
-      delete (window as any).imageCache;
+      window.loadMoreImages = undefined;
+      window.getImageProperties = undefined;
     };
   }, [loadMoreImages]);
 

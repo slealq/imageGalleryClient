@@ -11,6 +11,7 @@ export interface ImageData {
     collection_name: string;
     has_tags: boolean;
     has_crop: boolean;
+    mime_type: string;
 }
 
 export interface ImagesResponse {
