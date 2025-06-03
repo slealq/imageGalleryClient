@@ -8,9 +8,28 @@ interface Props {
 }
 
 const { imageUrl } = Astro.props;
+
+// Add TypeScript interface for window
+declare global {
+    interface Window {
+        openModal: (
+            imageUrl: string,
+            filename: string,
+            size: string,
+            created: string,
+            imageId: string,
+            hasCaption: boolean,
+            hasTags: boolean,
+            collectionName: string
+        ) => void;
+        openDrawer?: () => void;
+        loadMoreImages?: () => Promise<boolean>;
+        imageManager: ImageManager;
+    }
+}
 ---
 
-<div id="modal" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center">
+<div id="fullscreen-modal" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center">
     <div class="relative w-full h-full flex flex-col">
         <div id="modal-background" class="flex-1 flex items-center justify-center p-4 pb-20">
             <div class="relative">
@@ -29,10 +48,13 @@ const { imageUrl } = Astro.props;
         <div id="modal-footer" class="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm p-4 text-white text-sm">
             <div class="container mx-auto">
                 <div class="flex justify-between items-center mb-2">
-                    <div id="modal-filename" class="font-medium"></div>
+                    <div class="flex flex-col">
+                        <div id="modal-filename" class="font-medium"></div>
+                        <div id="modal-collection" class="text-gray-300 text-sm"></div>
+                    </div>
                     <div class="flex gap-4">
                         <div id="modal-size" class="text-gray-300"></div>
-                        <div id="modal-date" class="text-gray-300"></div>
+                        <div id="modal-created" class="text-gray-300"></div>
                     </div>
                 </div>
                 <div class="flex items-center gap-4">
@@ -40,7 +62,7 @@ const { imageUrl } = Astro.props;
                         <span class="w-2 h-2 rounded-full"></span>
                         <span class="text-sm">Caption Status</span>
                     </div>
-                    <button id="caption-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors cursor-pointer">
+                    <button id="modal-caption-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors cursor-pointer">
                         Manage Caption
                     </button>
 
@@ -48,7 +70,7 @@ const { imageUrl } = Astro.props;
                         <span class="w-2 h-2 rounded-full"></span>
                         <span class="text-sm">Crop Status</span>
                     </div>
-                    <button id="crop-button" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm font-medium transition-colors cursor-pointer">
+                    <button id="modal-crop-button" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm font-medium transition-colors cursor-pointer">
                         Crop Image
                     </button>
                 </div>
@@ -61,385 +83,276 @@ const { imageUrl } = Astro.props;
 <CropModal imageId="" />
 
 <script>
-    import { getCroppedImage } from '../utils/api';
     import { ImageManager } from '../utils/ImageManager';
 
-    let modal: HTMLElement | null = null;
-    let modalImage: HTMLImageElement | null = null;
-    let modalFilename: HTMLElement | null = null;
-    let modalSize: HTMLElement | null = null;
-    let modalDate: HTMLElement | null = null;
-    let captionButton: HTMLElement | null = null;
-    let imageElements: HTMLImageElement[] = [];
-    let currentImageIndex = -1;
-    let isLoadingMore = false;
-    let currentImageId: string | null = null;
-    let originalImageUrl: string | null = null;
+    class FullscreenHandler {
+        private modal: HTMLElement | null = null;
+        private modalImage: HTMLImageElement | null = null;
+        private modalFilename: HTMLElement | null = null;
+        private modalSize: HTMLElement | null = null;
+        private modalCreated: HTMLElement | null = null;
+        private modalCollection: HTMLElement | null = null;
+        private captionButton: HTMLElement | null = null;
+        private cropButton: HTMLElement | null = null;
+        private selectionButton: HTMLElement | null = null;
+        private imageElements: HTMLImageElement[] = [];
+        private currentImageIndex: number = -1;
+        private isLoadingMore: boolean = false;
+        private currentImageId: string | null = null;
+        private imageManager: ImageManager;
 
-    function formatFileSize(bytes: number): string {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    function formatDate(dateString: string): string {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    }
-
-    function updateStatuses(imageId: string) {
-        const properties = window.imageManager.getImageProperties(imageId);
-        if (!properties) return;
-
-        // Update caption status
-        const statusDot = document.querySelector('#caption-status .w-2');
-        const statusText = document.querySelector('#caption-status span:last-child');
-        if (statusDot && statusText) {
-            statusDot.className = `w-2 h-2 rounded-full ${properties.has_caption ? 'bg-green-500' : 'bg-red-500'}`;
-            statusText.textContent = properties.has_caption ? 'Has Caption' : 'No Caption';
+        constructor() {
+            this.imageManager = window.imageManager;
+            this.initializeElements();
+            this.setupEventListeners();
+            this.exposeOpenModal();
         }
 
-        // Update crop status
-        const cropStatusDot = document.querySelector('#crop-status .w-2');
-        const cropStatusText = document.querySelector('#crop-status span:last-child');
-        if (cropStatusDot && cropStatusText) {
-            cropStatusDot.className = `w-2 h-2 rounded-full ${properties.has_crop ? 'bg-green-500' : 'bg-red-500'}`;
-            cropStatusText.textContent = properties.has_crop ? 'Has Crop' : 'No Crop';
+        private initializeElements(): void {
+            this.modal = document.getElementById('fullscreen-modal');
+            this.modalImage = document.getElementById('modal-image') as HTMLImageElement;
+            this.modalFilename = document.getElementById('modal-filename');
+            this.modalSize = document.getElementById('modal-size');
+            this.modalCreated = document.getElementById('modal-created');
+            this.modalCollection = document.getElementById('modal-collection');
+            this.captionButton = document.getElementById('modal-caption-button');
+            this.cropButton = document.getElementById('modal-crop-button');
+            this.selectionButton = document.getElementById('modal-selection-button');
+            this.imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
         }
-    }
 
-    async function navigateImage(direction: 'next' | 'prev') {
-        if (currentImageIndex === -1) return;
-        
-        let newIndex = direction === 'next' 
-            ? Math.min(currentImageIndex + 1, imageElements.length - 1)
-            : Math.max(currentImageIndex - 1, 0);
-            
-        if (direction === 'next' && currentImageIndex === imageElements.length - 1 && !isLoadingMore) {
-            isLoadingMore = true;
-            try {
-                if (window.loadMoreImages) {
-                    const success = await window.loadMoreImages();
-                    if (success) {
-                        imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
-                        if (currentImageIndex < imageElements.length - 1) {
-                            newIndex = currentImageIndex + 1;
-                        }
-                    }
+        private setupEventListeners(): void {
+            // Modal background click
+            this.modal?.addEventListener('click', (e) => {
+                const target = e.target as HTMLElement;
+                if (target.id === 'modal-background') {
+                    this.closeModal();
                 }
-            } finally {
-                isLoadingMore = false;
-            }
-        }
-            
-        if (newIndex !== currentImageIndex) {
-            currentImageIndex = newIndex;
-            const img = imageElements[currentImageIndex];
-            const imageId = img.getAttribute('data-id');
-            
-            if (imageId) {
-                const image = await window.imageManager.createImageFromUrl(
-                    img.src,
-                    imageId,
-                    img.getAttribute('data-filename') || '',
-                    parseInt(img.getAttribute('data-size') || '0'),
-                    img.getAttribute('data-created') || ''
-                );
-                currentImageId = imageId;
-                
-                if (modalImage) {
-                    modalImage.src = image.getUrl();
-                    originalImageUrl = image.getUrl();
+            });
+
+            // Keyboard navigation
+            document.addEventListener('keydown', this.handleKeyDown.bind(this));
+
+            // Button handlers
+            this.cropButton?.addEventListener('click', () => {
+                if (this.currentImageId) {
+                    (window as any).openCropModal(this.currentImageId);
                 }
-                if (modalFilename) modalFilename.textContent = image.getFilename();
-                if (modalSize) modalSize.textContent = formatFileSize(image.getSize());
-                if (modalDate) modalDate.textContent = formatDate(image.getCreated());
+            });
 
-                updateStatuses(imageId);
-
-                // If caption modal is open, update it with the new image's caption
-                const captionModal = document.getElementById('caption-modal');
-                if (captionModal && !captionModal.classList.contains('hidden')) {
-                    (window as any).openCaptionModal(imageId);
+            this.captionButton?.addEventListener('click', () => {
+                if (this.currentImageId) {
+                    (window as any).openCaptionModal(this.currentImageId);
                 }
-            }
+            });
+
+            this.selectionButton?.addEventListener('click', this.handleSelectionClick.bind(this));
         }
-    }
 
-    function updateSelectionButton(selected: boolean) {
-        const button = document.getElementById('modal-selection-button');
-        if (!button) return;
-
-        const checkmark = button.querySelector('svg');
-        if (checkmark) {
-            checkmark.classList.toggle('hidden', !selected);
-        }
-        button.classList.toggle('bg-green-500', selected);
-        button.classList.toggle('bg-black/50', !selected);
-    }
-
-    async function openModal(
-        imageUrl: string,
-        filename: string,
-        size: string,
-        created: string,
-        imageId: string,
-        hasCaption: boolean,
-        hasTags: boolean,
-        collectionName: string
-    ) {
-        if (!modal || !modalImage || !modalFilename || !modalSize || !modalDate) return;
-        
-        currentImageId = imageId;
-        originalImageUrl = imageUrl;
-        
-        // Update image elements list
-        imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
-        
-        // Find the image that matches this URL
-        const img = imageElements.find(img => img.src === imageUrl);
-        
-        if (img) {
-            currentImageIndex = imageElements.indexOf(img);
-            const image = await window.imageManager.createImageFromUrl(
-                imageUrl,
-                imageId,
-                filename,
-                parseInt(size),
-                created
-            );
-            
-            // Update selection button
-            const selectionButton = document.getElementById('modal-selection-button');
-            if (selectionButton) {
-                selectionButton.setAttribute('data-id', imageId);
-                updateSelectionButton(image.isSelected());
-            }
-
-            modalImage.src = image.getUrl();
-            modalFilename.textContent = image.getFilename();
-            modalSize.textContent = formatFileSize(image.getSize());
-            modalDate.textContent = formatDate(image.getCreated());
-            
-            modal.classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
-
-            updateStatuses(imageId);
-        }
-    }
-
-    function closeModal() {
-        if (!modal) return;
-        modal.classList.add('hidden');
-        document.body.style.overflow = '';
-    }
-
-    // Function to update the modal image with the cropped version
-    async function updateCropImage() {
-        if (!currentImageId || !modalImage) return;
-        
-        try {
-            const image = window.imageManager.getImage(currentImageId);
-            if (!image) return;
-
-            const blob = await image.getCroppedImage();
-            if (blob) {
-                const blobUrl = URL.createObjectURL(blob);
-                
-                // Clean up previous blob URL if it exists
-                if (modalImage.src.startsWith('blob:')) {
-                    URL.revokeObjectURL(modalImage.src);
-                }
-                
-                modalImage.src = blobUrl;
-            }
-        } catch (error) {
-            console.error('Error fetching cropped image:', error);
-        }
-    }
-
-    // Initialize modal elements
-    document.addEventListener('DOMContentLoaded', () => {
-        modal = document.getElementById('modal');
-        modalImage = document.getElementById('modal-image') as HTMLImageElement;
-        modalFilename = document.getElementById('modal-filename');
-        modalSize = document.getElementById('modal-size');
-        modalDate = document.getElementById('modal-date');
-        captionButton = document.getElementById('caption-button');
-
-        // Get all image elements
-        imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
-
-        // Close modal when clicking outside the image
-        modal?.addEventListener('click', (e) => {
-            const target = e.target as HTMLElement;
-            if (target.id === 'modal-background') {
-                closeModal();
-            }
-        });
-
-        // Caption button click handler
-        captionButton?.addEventListener('click', () => {
-            if (currentImageId) {
-                updateCropImage();
-                (window as any).openCaptionModal(currentImageId);
-            }
-        });
-
-        // Add keyboard navigation
-        document.addEventListener('keydown', (e) => {
+        private handleKeyDown(e: KeyboardEvent): void {
             if (e.key === 'Escape') {
-                // Check if caption modal is open
-                const captionModal = document.getElementById('caption-modal');
-                const captionText = document.getElementById('caption-text');
-                
-                if (captionModal && !captionModal.classList.contains('hidden')) {
-                    // If textarea is focused, just blur it
-                    if (document.activeElement?.id === 'caption-text') {
-                        captionText?.blur();
-                        e.preventDefault();
-                        return;
+                this.closeModal();
+            } else if (e.key === 'ArrowLeft') {
+                this.navigateImage('prev');
+            } else if (e.key === 'ArrowRight') {
+                this.navigateImage('next');
+            }
+        }
+
+        private handleSelectionClick(e: Event): void {
+            e.stopPropagation();
+            if (!this.currentImageId) return;
+
+            const image = this.imageManager.getImage(this.currentImageId);
+            if (image) {
+                const selected = !image.isSelected();
+                image.setSelected(selected);
+                this.updateSelectionButton(selected);
+
+                // Update gallery button if it exists
+                const galleryButton = document.querySelector(`[data-id="${this.currentImageId}"] button`);
+                if (galleryButton) {
+                    galleryButton.classList.toggle('bg-green-500', selected);
+                    galleryButton.classList.toggle('bg-black/50', !selected);
+                    const checkmark = galleryButton.querySelector('svg');
+                    if (checkmark) {
+                        checkmark.classList.toggle('hidden', !selected);
                     }
-                    // Otherwise close caption modal
-                    captionModal.classList.add('hidden');
-                    e.preventDefault();
-                    return;
                 }
-                
-                // If main modal is open, close it
-                if (modal && !modal.classList.contains('hidden')) {
-                    closeModal();
-                    e.preventDefault();
-                    return;
-                }
             }
-
-            // Only handle other keys if main modal is open
-            if (modal?.classList.contains('hidden')) return;
-            
-            // Don't handle shortcuts if we're typing in the caption textarea
-            const activeElement = document.activeElement;
-            if (activeElement?.id === 'caption-text') return;
-            
-            switch (e.key) {
-                case 'ArrowLeft':
-                    navigateImage('prev');
-                    break;
-                case 'ArrowRight':
-                    navigateImage('next');
-                    break;
-                case 'c':
-                    // Open caption modal if main modal is open
-                    if (currentImageId) {
-                        (window as any).openCaptionModal(currentImageId);
-                    }
-                    break;
-                case 'r':
-                    // Open crop modal if main modal is open
-                    if (currentImageId) {
-                        (window as any).openCropModal(currentImageId);
-                    }
-                    break;
-            }
-        });
-
-        // Add crop button handler
-        const cropButton = document.getElementById('crop-button');
-        cropButton?.addEventListener('click', () => {
-            if (currentImageId) {
-                (window as any).openCropModal(currentImageId);
-            }
-        });
-
-        // Listen for crop modal open/close
-        const cropModal = document.getElementById('crop-modal');
-        if (cropModal) {
-            const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    if (mutation.attributeName === 'class') {
-                        const isHidden = cropModal.classList.contains('hidden');
-                        if (!isHidden && currentImageId && modalImage) {
-                            // When crop modal opens, show cropped version
-                            updateCropImage();
-                        } else if (isHidden && originalImageUrl && modalImage) {
-                            // When crop modal closes, show original version
-                            modalImage.src = originalImageUrl;
-                        }
-                    }
-                });
-            });
-
-            observer.observe(cropModal, { attributes: true });
         }
 
-        // Listen for caption modal open/close
-        const captionModal = document.getElementById('caption-modal');
-        if (captionModal) {
-            const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    if (mutation.attributeName === 'class') {
-                        const isHidden = captionModal.classList.contains('hidden');
-                        if (!isHidden && currentImageId && modalImage) {
-                            // When caption modal opens, re-fetch the image
-                            updateCropImage();
-                        } else if (isHidden && currentImageId) {
-                            // When caption modal closes, update the status
-                            updateStatuses(currentImageId);
-                        }
-                    }
-                });
-            });
-
-            observer.observe(captionModal, { attributes: true });
-        }
-
-        // Listen for crop application
-        const applyCropButton = document.getElementById('apply-crop');
-        if (applyCropButton) {
-            applyCropButton.addEventListener('click', () => {
-                // Wait a short moment for the server to process the crop
-                setTimeout(() => {
-                    // Revert to original image after applying crop
-                    if (originalImageUrl && modalImage) {
-                        modalImage.src = originalImageUrl;
-                    }
-                }, 100);
-            });
-        }
-
-        // Selection button handler
-        const selectionButton = document.getElementById('modal-selection-button');
-        selectionButton?.addEventListener('click', () => {
-            if (!currentImageId) return;
-
-            const image = window.imageManager.getImage(currentImageId);
-            if (!image) return;
-
-            const selected = !image.isSelected();
-            image.setSelected(selected);
-            updateSelectionButton(selected);
-
-            // Update the gallery selection button if it exists
-            const galleryButton = document.querySelector(`.selection-button[data-id="${currentImageId}"]`);
-            if (galleryButton) {
-                const checkmark = galleryButton.querySelector('svg');
+        private updateSelectionButton(selected: boolean): void {
+            if (this.selectionButton) {
+                this.selectionButton.classList.toggle('bg-green-500', selected);
+                this.selectionButton.classList.toggle('bg-black/50', !selected);
+                const checkmark = this.selectionButton.querySelector('svg');
                 if (checkmark) {
                     checkmark.classList.toggle('hidden', !selected);
                 }
-                galleryButton.classList.toggle('bg-green-500', selected);
-                galleryButton.classList.toggle('bg-black/50', !selected);
             }
-        });
-    });
+        }
 
-    // Make openModal available globally
-    (window as any).openModal = openModal;
+        private updateStatuses(imageId: string): void {
+            const image = this.imageManager.getImage(imageId);
+            if (!image) return;
+
+            // Update caption status
+            const captionStatusDot = document.querySelector('#caption-status .w-2');
+            const captionStatusText = document.querySelector('#caption-status span:last-child');
+            if (captionStatusDot && captionStatusText) {
+                const hasCaption = image.getProperties()?.has_caption || false;
+                captionStatusDot.className = `w-2 h-2 rounded-full ${hasCaption ? 'bg-green-500' : 'bg-red-500'}`;
+                captionStatusText.textContent = hasCaption ? 'Has Caption' : 'No Caption';
+            }
+
+            // Update crop status
+            const cropStatusDot = document.querySelector('#crop-status .w-2');
+            const cropStatusText = document.querySelector('#crop-status span:last-child');
+            if (cropStatusDot && cropStatusText) {
+                const hasCrop = image.getProperties()?.has_crop || false;
+                cropStatusDot.className = `w-2 h-2 rounded-full ${hasCrop ? 'bg-green-500' : 'bg-red-500'}`;
+                cropStatusText.textContent = hasCrop ? 'Has Crop' : 'No Crop';
+            }
+        }
+
+        private async navigateImage(direction: 'next' | 'prev'): Promise<void> {
+            if (this.currentImageIndex === -1) return;
+            
+            let newIndex = direction === 'next' 
+                ? Math.min(this.currentImageIndex + 1, this.imageElements.length - 1)
+                : Math.max(this.currentImageIndex - 1, 0);
+                
+            if (direction === 'next' && this.currentImageIndex === this.imageElements.length - 1 && !this.isLoadingMore) {
+                this.isLoadingMore = true;
+                try {
+                    if (window.loadMoreImages) {
+                        const success = await window.loadMoreImages();
+                        if (success) {
+                            this.imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
+                            if (this.currentImageIndex < this.imageElements.length - 1) {
+                                newIndex = this.currentImageIndex + 1;
+                            }
+                        }
+                    }
+                } finally {
+                    this.isLoadingMore = false;
+                }
+            }
+                
+            if (newIndex !== this.currentImageIndex) {
+                this.currentImageIndex = newIndex;
+                const img = this.imageElements[this.currentImageIndex];
+                const imageId = img.getAttribute('data-id');
+                
+                if (imageId) {
+                    const image = this.imageManager.getImage(imageId);
+                    if (image) {
+                        this.currentImageId = imageId;
+                        
+                        if (this.modalImage) {
+                            this.modalImage.src = image.getUrl();
+                        }
+                        if (this.modalFilename) this.modalFilename.textContent = image.getFilename();
+                        if (this.modalSize) this.modalSize.textContent = this.formatFileSize(image.getSize());
+                        if (this.modalCreated) this.modalCreated.textContent = this.formatDate(image.getCreated());
+                        if (this.modalCollection) this.modalCollection.textContent = img.getAttribute('data-collection') || '';
+
+                        this.updateStatuses(imageId);
+
+                        // If caption modal is open, update it with the new image's caption
+                        const captionModal = document.getElementById('caption-modal');
+                        if (captionModal && !captionModal.classList.contains('hidden')) {
+                            (window as any).openCaptionModal(imageId);
+                        }
+                    }
+                }
+            }
+        }
+
+        private formatFileSize(bytes: number): string {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        private formatDate(dateString: string): string {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        private closeModal(): void {
+            if (this.modal) {
+                this.modal.classList.add('hidden');
+                document.body.style.overflow = '';
+            }
+        }
+
+        public openModal(
+            imageUrl: string,
+            filename: string,
+            size: string,
+            created: string,
+            imageId: string,
+            hasCaption: boolean,
+            hasTags: boolean,
+            collectionName: string
+        ): void {
+            this.currentImageId = imageId;
+            
+            if (this.modal && this.modalImage && this.modalFilename && this.modalSize && 
+                this.modalCreated && this.modalCollection && this.captionButton && 
+                this.cropButton && this.selectionButton) {
+                
+                this.modalImage.setAttribute('src', imageUrl);
+                this.modalImage.setAttribute('data-filename', filename);
+                this.modalImage.setAttribute('data-size', size);
+                this.modalImage.setAttribute('data-created', created);
+                this.modalImage.setAttribute('data-id', imageId);
+                this.modalImage.setAttribute('data-has-caption', hasCaption.toString());
+                this.modalImage.setAttribute('data-has-tags', hasTags.toString());
+                this.modalImage.setAttribute('data-collection', collectionName);
+
+                this.modalFilename.textContent = filename;
+                this.modalSize.textContent = this.formatFileSize(parseInt(size));
+                this.modalCreated.textContent = new Date(created).toLocaleString();
+                this.modalCollection.textContent = collectionName;
+
+                // Ensure buttons are always visible
+                this.captionButton.classList.remove('hidden');
+                this.cropButton.classList.remove('hidden');
+
+                // Update selection button state
+                const image = this.imageManager.getImage(imageId);
+                if (image) {
+                    this.updateSelectionButton(image.isSelected());
+                }
+
+                // Update statuses
+                this.updateStatuses(imageId);
+
+                this.modal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+
+        private exposeOpenModal(): void {
+            if (typeof window !== 'undefined') {
+                window.openModal = this.openModal.bind(this);
+            }
+        }
+    }
+
+    // Initialize the handler when the DOM is loaded
+    document.addEventListener('DOMContentLoaded', () => {
+        new FullscreenHandler();
+    });
 </script> 

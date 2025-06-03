@@ -186,9 +186,16 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
   const handleImageClick = (image: ImageData) => {
     if (!imageManagerRef.current) return;
 
+    // Log for debugging
+    console.log('Image clicked:', image);
+    console.log('Window openModal exists:', typeof window !== 'undefined' && !!window.openModal);
+
     if (typeof window !== 'undefined' && window.openModal) {
+      const imageUrl = imageManagerRef.current.getImageUrl(image.id);
+      console.log('Opening modal with URL:', imageUrl);
+      
       window.openModal(
-        imageManagerRef.current.getImageUrl(image.id),
+        imageUrl,
         image.filename,
         image.size.toString(),
         image.created_at,
@@ -197,6 +204,8 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
         image.has_tags,
         image.collection_name
       );
+    } else {
+      console.error('openModal function not found on window object');
     }
   };
 
@@ -208,7 +217,6 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
     if (image) {
       const selected = !image.isSelected();
       image.setSelected(selected);
-      setSelectedCount(prev => selected ? prev + 1 : prev - 1);
     }
   };
 
@@ -265,6 +273,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
                   key={img.id}
                   className="cursor-pointer overflow-hidden flex items-center justify-center bg-black/20 backdrop-blur-sm p-1 group rounded-sm relative"
                   onClick={() => handleImageClick(img)}
+                  data-id={img.id}
                 >
                   <button
                     className={`absolute top-2 right-2 w-8 h-8 rounded-full border-2 border-white transition-colors z-10 ${
