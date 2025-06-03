@@ -63,6 +63,7 @@ const { imageUrl } = Astro.props;
     let currentImageId: string | null = null;
     let originalImageUrl: string | null = null;
 
+
     function formatFileSize(bytes: number): string {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -354,7 +355,12 @@ const { imageUrl } = Astro.props;
         if (applyCropButton) {
             applyCropButton.addEventListener('click', () => {
                 // Wait a short moment for the server to process the crop
-                setTimeout(updateCropImage, 100);
+                setTimeout(() => {
+                    // Revert to original image after applying crop
+                    if (originalImageUrl && modalImage) {
+                        modalImage.src = originalImageUrl;
+                    }
+                }, 100);
             });
         }
     });
