@@ -262,6 +262,10 @@ const { imageId } = Astro.props;
     function updateRatio(size: number | null, button: HTMLElement) {
         selectedRatio = size;
         if (currentImageId && cropPreview) {
+            // Store current dimensions
+            const currentWidth = cropPreview.width;
+            const currentHeight = cropPreview.height;
+
             if (size === null) {
                 // Use original image
                 cropPreview.src = getImageUrl(currentImageId);
@@ -269,9 +273,18 @@ const { imageId } = Astro.props;
                 // Use preview with specified size
                 cropPreview.src = getImagePreviewUrl(currentImageId, size);
             }
+
+            // After image loads, restore dimensions
+            const img = cropPreview;  // Create reference to avoid null checks
+            img.onload = () => {
+                if (img) {  // Double check img still exists
+                    img.style.width = `${currentWidth}px`;
+                    img.style.height = `${currentHeight}px`;
+                    initializeCropBox();
+                }
+            };
         }
         updateButtonStyles(button);
-        initializeCropBox();
     }
 
     function debugElements() {
