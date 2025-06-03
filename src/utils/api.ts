@@ -36,6 +36,11 @@ export interface CropRequest {
     normalizedDeltas: NormalizedDeltas;
 }
 
+export interface CropInfo {
+    targetSize: number;
+    normalizedDeltas: NormalizedDeltas;
+}
+
 export async function fetchImages(page: number = 1, pageSize: number = 20): Promise<ImagesResponse> {
     const response = await fetch(`${API_BASE_URL}/images?page=${page}&page_size=${pageSize}`);
     if (!response.ok) {
@@ -114,4 +119,15 @@ export async function cropImage(imageId: string, targetSize: number, normalizedD
     }
     
     return response.blob();
+}
+
+export async function getCrop(imageId: string): Promise<CropInfo> {
+    const response = await fetch(`${API_BASE_URL}/images/${imageId}/crop`);
+    if (!response.ok) {
+        if (response.status === 404) {
+            throw new Error('No crop found for this image');
+        }
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.json();
 } 

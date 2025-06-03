@@ -55,8 +55,8 @@ const { imageId } = Astro.props;
 </div>
 
 <script>
-    import { getImageUrl, getImagePreviewUrl, cropImage } from '../utils/api';
-    import type { NormalizedDelta } from '../utils/api';
+    import { getImageUrl, getImagePreviewUrl, cropImage, getCrop } from '../utils/api';
+    import type { NormalizedDeltas } from '../utils/api';
 
     type CropBoxPosition = {
         left: number;
@@ -81,12 +81,13 @@ const { imageId } = Astro.props;
 
         constructor(
             imagePreviewElement: HTMLImageElement,
-            cropBoxElement: HTMLElement) {
+            cropBoxElement: HTMLElement,
+            initialDeltas?: { x: number, y: number }) {
             this.imagePreviewElement = imagePreviewElement;
             this.cropBoxElement = cropBoxElement;
 
-            this.normalizedDeltaX = 0;
-            this.normalizedDeltaY = 0;
+            this.normalizedDeltaX = initialDeltas?.x ?? 0;
+            this.normalizedDeltaY = initialDeltas?.y ?? 0;
         }
 
         applyDelta(deltaX: number, deltaY: number) {
@@ -146,12 +147,19 @@ const { imageId } = Astro.props;
         }
 
         getNormalizedDeltas() {
-            const normalizedDelta: NormalizedDelta = {
+            const normalizedDelta: NormalizedDeltas = {
                 x: this.normalizedDeltaX,
                 y: this.normalizedDeltaY,
             }
 
             return normalizedDelta;
+        }
+
+        setNormalizedDeltas(normalizedDeltaX: number, normalizedDeltaY: number) {
+            this.normalizedDeltaX = normalizedDeltaX;
+            this.normalizedDeltaY = normalizedDeltaY;
+
+            // this.refreshPosition();
         }
 
         _setNormalizedDeltas(deltaX: number, deltaY: number) {
@@ -394,13 +402,22 @@ const { imageId } = Astro.props;
             // Update the fullscreen modal image
             const fullscreenImage = document.getElementById('modal-image') as HTMLImageElement;
             if (fullscreenImage) {
-                fullscreenImage.src = url;
+                // fullscreenImage.src = url;
             }
 
             // Update the has_crop property on the image element
             const imageElement = document.querySelector(`img[data-id="${currentImageId}"]`);
             if (imageElement) {
                 imageElement.setAttribute('data-has-crop', 'true');
+            }
+
+            // Update crop status
+            const hasCrop = imageElement?.getAttribute('data-has-crop') === 'true';
+            const cropStatusDot = document.querySelector('#crop-status .w-2');
+            const cropStatusText = document.querySelector('#crop-status span:last-child');
+            if (cropStatusDot && cropStatusText) {
+                cropStatusDot.className = `w-2 h-2 rounded-full ${hasCrop ? 'bg-green-500' : 'bg-red-500'}`;
+                cropStatusText.textContent = hasCrop ? 'Has Crop' : 'No Crop';
             }
             
             // Close the crop modal
@@ -585,15 +602,55 @@ const { imageId } = Astro.props;
     });
 
     // Make openCropModal available globally
-    (window as any).openCropModal = (imageId: string) => {
+    (window as any).openCropModal = async (imageId: string) => {
         currentImageId = imageId;
         if (cropPreview) {
-            // Start with original size
-            cropPreview.src = getImageUrl(imageId);
-            selectedRatio = null;
-            const originalButton = document.getElementById('crop-original');
-            if (originalButton) {
-                updateButtonStyles(originalButton);
+            try {
+                // Check if image has existing crop
+                const cropInfo = await getCrop(imageId);
+                selectedRatio = cropInfo.targetSize;
+                
+                // Set preview with the target size
+                cropPreview.src = getImagePreviewUrl(imageId, cropInfo.targetSize);
+                
+                // Update button styles
+                const button = document.getElementById(`crop-${cropInfo.targetSize}`);
+                if (button) {
+                    updateButtonStyles(button);
+                }
+
+                // Wait for image to load before initializing crop box
+                await new Promise((resolve) => {
+                    cropPreview!.onload = resolve;
+                });
+
+                // Initialize crop box with existing deltas
+                if (cropBox && cropPreview) {
+                    cropBoxHandler?.setNormalizedDeltas(cropInfo.normalizedDeltas.x, cropInfo.normalizedDeltas.y);
+                    // cropBoxHandler = new CropboxHandler(cropPreview, cropBox, cropInfo.normalizedDeltas);
+                    // mouseHandler = new MouseHandler(cropBoxHandler);
+                    // initializeCropBox();
+                }
+            } catch (error) {
+                // If no crop exists, start with original size
+                cropPreview.src = getImageUrl(imageId);
+                selectedRatio = null;
+                const originalButton = document.getElementById('crop-original');
+                if (originalButton) {
+                    updateButtonStyles(originalButton);
+                }
+
+                // Wait for image to load before initializing crop box
+                await new Promise((resolve) => {
+                    cropPreview!.onload = resolve;
+                });
+
+                // Initialize crop box without deltas
+                if (cropBox && cropPreview) {
+                    // cropBoxHandler = new CropboxHandler(cropPreview, cropBox);
+                    // mouseHandler = new MouseHandler(cropBoxHandler);
+                    // initializeCropBox();
+                }
             }
         }
         cropModal?.classList.remove('hidden');
