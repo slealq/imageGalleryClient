@@ -313,6 +313,9 @@ declare global {
             if (this.modalCreated) this.modalCreated.textContent = this.formatDate(image.getCreated());
             if (this.modalCollection) this.modalCollection.textContent = image.getMetadata().collection_name || '';
 
+            // Update selection button state from ImageManager
+            this.updateSelectionButton(image.isSelected());
+
             this.updateStatuses(image.getId());
 
             // If caption modal is open, update it with the new image's caption
@@ -345,6 +348,7 @@ declare global {
             if (this.modal) {
                 this.modal.classList.add('hidden');
                 document.body.style.overflow = '';
+                window.dispatchEvent(new Event('modalClosed'));
             }
         }
 

@@ -144,6 +144,21 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
     return () => clearInterval(interval);
   }, []);
 
+  // Listen for modal close to refresh image properties
+  useEffect(() => {
+    const handleModalClose = () => {
+      // Force a re-render by updating the images state
+      setImages(prevImages => [...prevImages]);
+    };
+
+    // Add event listener for modal close
+    window.addEventListener('modalClosed', handleModalClose);
+
+    return () => {
+      window.removeEventListener('modalClosed', handleModalClose);
+    };
+  }, []);
+
   // Intersection Observer setup for infinite scrolling
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -269,6 +284,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
           const isSelected = image.isSelected();
           const imageUrl = image.getUrl();
           const metadata = image.getMetadata();
+          const properties = image.getProperties();
           
           return (
             <div
@@ -284,6 +300,15 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
                   className="w-full h-full object-cover"
                   loading="lazy"
                 />
+                {/* Status indicators */}
+                <div className="absolute top-2 left-2 flex gap-1">
+                  {properties.has_caption && (
+                    <div className="w-2 h-2 rounded-full bg-blue-500 border border-white shadow-sm"></div>
+                  )}
+                  {properties.has_crop && (
+                    <div className="w-2 h-2 rounded-full bg-purple-500 border border-white shadow-sm"></div>
+                  )}
+                </div>
                 <button
                   onClick={(e) => handleSelectionClick(e, metadata.id)}
                   className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 border-white transition-colors ${
