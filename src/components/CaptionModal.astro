@@ -305,9 +305,9 @@ const { imageId } = Astro.props;
                 return;
             }
 
-            // Don't handle shortcuts if we're typing in the textarea
+            // Don't handle shortcuts if we're typing in the textarea or prompt input
             const activeElement = document.activeElement;
-            if (activeElement?.id === 'caption-input') return;
+            if (activeElement?.id === 'caption-input' || activeElement?.id === 'prompt-input') return;
 
             // Handle g and s keys directly when textarea is not focused
             switch (e.key.toLowerCase()) {
