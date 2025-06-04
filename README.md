@@ -1,38 +1,55 @@
-# Astro Starter Kit: Basics
+# Violet Visual Gallery
 
-```sh
-npm create astro@latest -- --template basics
-```
+A modern, interactive image gallery application built with Astro and React. This application allows users to view, manage, and interact with images in a beautiful and intuitive interface.
 
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/withastro/astro/tree/latest/examples/basics)
-[![Open with CodeSandbox](https://assets.codesandbox.io/github/button-edit-lime.svg)](https://codesandbox.io/p/sandbox/github/withastro/astro/tree/latest/examples/basics)
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/withastro/astro?devcontainer_path=.devcontainer/basics/devcontainer.json)
+## Features
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+- 📸 Interactive image gallery with grid and list views
+- 🔍 Fullscreen image viewing with zoom capabilities
+- ✂️ Image cropping functionality
+- 📝 Image caption editing
+- 🎨 Modern, responsive design
+- ⚡ Fast performance with Astro's partial hydration
+- 🖼️ Support for various image formats
 
-![just-the-basics](https://github.com/withastro/astro/assets/2244813/a0a5533c-a856-4198-8470-2d67b1d7c554)
-
-## 🚀 Project Structure
-
-Inside of your Astro project, you'll see the following folders and files:
+## Project Structure
 
 ```text
 /
-├── public/
-│   └── favicon.svg
+├── public/           # Static assets
 ├── src/
-│   ├── layouts/
-│   │   └── Layout.astro
-│   └── pages/
-│       └── index.astro
+│   ├── assets/      # Project assets
+│   ├── components/  # React and Astro components
+│   │   ├── Gallery.astro        # Main gallery component
+│   │   ├── GalleryReact.tsx     # React gallery implementation
+│   │   ├── FullscreenModal.astro # Fullscreen image viewer
+│   │   ├── CropModal.astro      # Image cropping interface
+│   │   ├── CaptionModal.astro   # Caption editing interface
+│   │   ├── Drawer.astro         # Navigation drawer
+│   │   ├── Image.astro          # Image component
+│   │   └── Welcome.astro        # Welcome screen
+│   ├── layouts/     # Page layouts
+│   ├── pages/       # Application pages
+│   ├── styles/      # Global styles
+│   ├── types/       # TypeScript type definitions
+│   └── utils/       # Utility functions
 └── package.json
 ```
 
-To learn more about the folder structure of an Astro project, refer to [our guide on project structure](https://docs.astro.build/en/basics/project-structure/).
+## Getting Started
 
-## 🧞 Commands
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
+4. Open [http://localhost:4321](http://localhost:4321) in your browser
 
-All commands are run from the root of the project, from a terminal:
+## Available Scripts
 
 | Command                   | Action                                           |
 | :------------------------ | :----------------------------------------------- |
@@ -40,9 +57,43 @@ All commands are run from the root of the project, from a terminal:
 | `npm run dev`             | Starts local dev server at `localhost:4321`      |
 | `npm run build`           | Build your production site to `./dist/`          |
 | `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
 
-## 👀 Want to learn more?
+## Gallery Features
 
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+### Image Viewing
+[Image of gallery view]
+
+- Grid and list view options
+- Responsive layout
+- Smooth image loading
+- Thumbnail previews
+
+### Fullscreen Mode
+[Image of fullscreen view]
+
+- Zoom in/out functionality
+- Pan and drag support
+- Navigation between images
+- Image information display
+
+### Image Editing
+[Image of editing interface]
+
+- Crop images to desired dimensions
+- Add and edit image captions
+- Save changes to image metadata
+
+## Technologies Used
+
+- [Astro](https://astro.build) - Static site generation
+- [React](https://reactjs.org) - Interactive components
+- [TypeScript](https://www.typescriptlang.org) - Type safety
+- [TailwindCSS](https://tailwindcss.com) - Styling
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
