@@ -48,6 +48,10 @@ export interface CropResponse {
     imageUrl: string;
 }
 
+export interface GenerateCaptionRequest {
+    prompt?: string;
+}
+
 export async function fetchImages(page: number = 1, pageSize: number = 30): Promise<ImagesResponse> {
     const response = await fetch(`${API_BASE_URL}/images?page=${page}&page_size=${pageSize}`);
     if (!response.ok) {
@@ -91,15 +95,84 @@ export async function saveImageCaption(imageId: string, caption: string): Promis
     }
 }
 
-export async function generateImageCaption(imageId: string): Promise<string> {
-    const response = await fetch(`${API_BASE_URL}/images/${imageId}/generate-caption`, {
-        method: 'POST',
-    });
-    if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+export async function generateImageCaption(imageId: string, prompt?: string): Promise<string> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/generate-caption/${imageId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ prompt }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to generate caption');
+        }
+
+        const data = await response.json();
+        return data.caption;
+    } catch (error) {
+        console.error('Error generating caption:', error);
+        throw error;
     }
-    const data: CaptionResponse = await response.json();
-    return data.caption;
+}
+
+export async function streamImageCaption(
+    imageId: string, 
+    prompt: string | undefined,
+    onChunk: (chunk: string) => void,
+    onComplete: (finalCaption: string) => void,
+    onError: (error: Error) => void
+): Promise<void> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/stream-caption/${imageId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ prompt }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to stream caption');
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) {
+            throw new Error('Failed to get response reader');
+        }
+
+        const decoder = new TextDecoder();
+        let accumulatedCaption = '';  // Accumulate all chunks
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        if (data.chunk) {
+                            accumulatedCaption += data.chunk;  // Append new chunk
+                            onChunk(accumulatedCaption);  // Send the accumulated text
+                        } else if (data.error) {
+                            throw new Error(data.error);
+                        }
+                    } catch (e) {
+                        console.error('Error parsing chunk:', e);
+                    }
+                }
+            }
+        }
+        
+        onComplete(accumulatedCaption);
+    } catch (error) {
+        onError(error instanceof Error ? error : new Error('Unknown error occurred'));
+    }
 }
 
 export function getImagePreviewUrl(imageId: string, targetSize: number): string {

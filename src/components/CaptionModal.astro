@@ -24,14 +24,41 @@ const { imageId } = Astro.props;
             </div>
         </div>
         <div class="space-y-4">
-            <textarea id="caption-text" class="w-full h-32 bg-gray-800 text-white rounded-lg p-3 resize-none focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Enter caption..."></textarea>
-            <div class="flex gap-3">
-                <button id="generate-caption" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm font-medium transition-colors">
-                    Generate Caption
-                </button>
-                <button id="save-caption" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium transition-colors">
-                    Save Caption
-                </button>
+            <div>
+                <label for="caption-input" class="block text-sm font-medium text-white mb-1">Caption</label>
+                <textarea
+                    id="caption-input"
+                    class="w-full h-32 p-2 border border-gray-600 bg-gray-800 text-white rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="Enter a caption for the image..."
+                ></textarea>
+            </div>
+
+            <div>
+                <label for="prompt-input" class="block text-sm font-medium text-white mb-1">Generation Prompt (Optional)</label>
+                <input
+                    type="text"
+                    id="prompt-input"
+                    class="w-full p-2 border border-gray-600 bg-gray-800 text-white rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="Enter a prompt to guide caption generation..."
+                />
+            </div>
+
+            <div class="flex justify-between items-center">
+                <div class="flex gap-2">
+                    <button
+                        id="generate-caption"
+                        class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    >
+                        Generate Caption
+                    </button>
+                    <button
+                        id="save-caption"
+                        class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                    >
+                        Save Caption
+                    </button>
+                </div>
+                <div id="status-message" class="text-sm text-gray-300"></div>
             </div>
         </div>
         <div id="timer" class="absolute bottom-2 right-2 text-sm text-gray-400 hidden">
@@ -41,7 +68,7 @@ const { imageId } = Astro.props;
 </div>
 
 <script>
-    import { generateImageCaption, getCrop, getImagePreviewUrl, API_BASE_URL, getImageUrl } from '../utils/api';
+    import { generateImageCaption, streamImageCaption, getCrop, getImagePreviewUrl, API_BASE_URL, getImageUrl } from '../utils/api';
     import { ImageManager } from '../utils/ImageManager';
 
     let captionModal: HTMLElement | null = null;
@@ -59,6 +86,7 @@ const { imageId } = Astro.props;
     let timerValue: HTMLElement | null = null;
     let timerInterval: number | null = null;
     let startTime: number | null = null;
+    let isGenerating = false;
 
     function updateOpacity(value: number) {
         currentOpacity = value;
@@ -133,49 +161,80 @@ const { imageId } = Astro.props;
         }
     }
 
+    function showStatus(message: string, isError = false) {
+        const statusElement = document.getElementById('status-message');
+        if (statusElement) {
+            statusElement.textContent = message;
+            statusElement.className = `text-sm ${isError ? 'text-red-500' : 'text-gray-500'}`;
+        }
+    }
+
     async function handleGenerateCaption() {
-        if (!currentImageId || !captionText) return;
+        if (!currentImageId || isGenerating) return;
+
+        const promptInput = document.getElementById('prompt-input') as HTMLInputElement;
+        const prompt = promptInput.value.trim();
+        const captionInput = document.getElementById('caption-input') as HTMLTextAreaElement;
+        
+        isGenerating = true;
+        showStatus('Generating caption...');
+        captionInput.value = ''; // Clear previous caption
+        
         try {
-            generateCaptionBtn?.classList.add('bg-purple-800', 'opacity-50', 'cursor-not-allowed');
-            generateCaptionBtn?.setAttribute('disabled', 'true');
-            
             startTimer();
             
-            const generatedCaption = await generateImageCaption(currentImageId);
-            captionText.value = generatedCaption;
-        } catch (error) {
-            console.error('Error generating caption:', error);
+            await streamImageCaption(
+                currentImageId,
+                prompt,
+                (chunk) => {
+                    // Update the caption input with each chunk
+                    captionInput.value = chunk;
+                    // Scroll to the bottom of the textarea
+                    captionInput.scrollTop = captionInput.scrollHeight;
+                },
+                (finalCaption) => {
+                    updateCaptionStatus(finalCaption.length > 0);
+                    showStatus('Caption generated successfully!');
+                },
+                (error) => {
+                    console.error('Error generating caption:', error);
+                    showStatus('Failed to generate caption. Please try again.', true);
+                }
+            );
         } finally {
             stopTimer();
-            generateCaptionBtn?.classList.remove('bg-purple-800', 'opacity-50', 'cursor-not-allowed');
-            generateCaptionBtn?.removeAttribute('disabled');
+            isGenerating = false;
         }
     }
 
     async function handleSaveCaption() {
-        if (!currentImageId || !captionText) return;
-        try {
-            saveCaptionBtn?.classList.add('bg-green-800');
-            
-            const image = window.imageManager.getImage(currentImageId);
-            if (!image) return;
+        if (!currentImageId) return;
 
-            await image.saveCaption(captionText.value);
-            updateCaptionStatus(captionText.value.length > 0);
+        const captionInput = document.getElementById('caption-input') as HTMLTextAreaElement;
+        const caption = captionInput.value.trim();
+        
+        showStatus('Saving caption...');
+        
+        try {
+            await window.imageManager.getImage(currentImageId)?.saveCaption(caption);
+            updateCaptionStatus(caption.length > 0);
+            
+            // Dispatch event to notify that the modal is closed
+            window.dispatchEvent(new CustomEvent('modalClosed'));
+            
+            // Close the modal
+            captionModal?.classList.add('hidden');
             
             // Update the data attributes on the image element
             const imageElement = document.querySelector(`img[data-id="${currentImageId}"]`);
             if (imageElement) {
-                imageElement.setAttribute('data-has-caption', captionText.value.length > 0 ? 'true' : 'false');
+                imageElement.setAttribute('data-has-caption', caption.length > 0 ? 'true' : 'false');
             }
             
-            setTimeout(() => {
-                saveCaptionBtn?.classList.remove('bg-green-800');
-                captionModal?.classList.add('hidden');
-            }, 200);
+            showStatus('Caption saved successfully!');
         } catch (error) {
             console.error('Error saving caption:', error);
-            saveCaptionBtn?.classList.remove('bg-green-800');
+            showStatus('Failed to save caption. Please try again.', true);
         }
     }
 
@@ -183,7 +242,7 @@ const { imageId } = Astro.props;
     document.addEventListener('DOMContentLoaded', () => {
         captionModal = document.getElementById('caption-modal');
         captionBox = document.getElementById('caption-box');
-        captionText = document.getElementById('caption-text') as HTMLTextAreaElement;
+        captionText = document.getElementById('caption-input') as HTMLTextAreaElement;
         generateCaptionBtn = document.getElementById('generate-caption');
         saveCaptionBtn = document.getElementById('save-caption');
         closeCaptionModalBtn = document.getElementById('close-caption-modal');
@@ -237,7 +296,7 @@ const { imageId } = Astro.props;
             }
 
             // Handle Enter key to focus textarea
-            if (e.key === 'Enter' && !document.activeElement?.id.includes('caption-text')) {
+            if (e.key === 'Enter' && !document.activeElement?.id.includes('caption-input')) {
                 e.preventDefault();
                 if (captionText) {
                     captionText.focus();
@@ -248,7 +307,7 @@ const { imageId } = Astro.props;
 
             // Don't handle shortcuts if we're typing in the textarea
             const activeElement = document.activeElement;
-            if (activeElement?.id === 'caption-text') return;
+            if (activeElement?.id === 'caption-input') return;
 
             // Handle g and s keys directly when textarea is not focused
             switch (e.key.toLowerCase()) {
@@ -282,14 +341,14 @@ const { imageId } = Astro.props;
     });
 
     // Make functions available globally
-    (window as any).openCaptionModal = async (imageId: string) => {
+    (window as any).openCaptionModal = async (imageId: string, currentCaption: string = '') => {
         currentImageId = imageId;
         captionModal?.classList.remove('hidden');
         updateOpacity(currentOpacity);
         updateBoxOpacity(currentBoxOpacity);
         
         if (captionText) {
-            captionText.value = '';
+            captionText.value = currentCaption;
         }
 
         // Check if image has a crop and update the fullscreen modal image
