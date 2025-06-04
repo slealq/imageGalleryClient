@@ -40,7 +40,13 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetchImages(pageNum);
+      const currentFilter = imageManager.current.getCurrentFilter();
+      const response = await fetchImages({ 
+        page: pageNum,
+        ...currentFilter
+      });
+      
+      console.log('Loading images for page:', { pageNum, totalImages: response.images.length });
       
       // Create ImageData objects and add them to ImageManager
       const newImages = await Promise.all(
@@ -58,11 +64,25 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
         })
       );
 
+      console.log('New images loaded:', { 
+        count: newImages.length,
+        ids: newImages.map(img => img.getId())
+      });
+
       // Update the sequence in ImageManager
       updateImageManagerSequence(newImages);
+      
+      console.log('Updated image sequence:', {
+        sequence: imageManager.current.getImageSequence(),
+        totalImages: imageManager.current.getTotalImages()
+      });
 
       setImages(prevImages => {
         const updatedImages = pageNum === 1 ? newImages : [...prevImages, ...newImages];
+        console.log('Updated images state:', {
+          totalImages: updatedImages.length,
+          ids: updatedImages.map(img => img.getId())
+        });
         return updatedImages;
       });
       
@@ -245,6 +265,18 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
       image.setSelected(selected);
     }
   };
+
+  // Add filter change listener
+  useEffect(() => {
+    const handleFilterChange = () => {
+      // Reset to page 1 and reload images when filters change
+      setPage(1);
+      loadImages(1);
+    };
+
+    window.addEventListener('filtersChanged', handleFilterChange);
+    return () => window.removeEventListener('filtersChanged', handleFilterChange);
+  }, [loadImages]);
 
   return (
     <div className="container mx-auto px-4 py-8">

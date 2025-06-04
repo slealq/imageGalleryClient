@@ -52,18 +52,55 @@ export interface GenerateCaptionRequest {
     prompt?: string;
 }
 
-export async function fetchImages(page: number = 1, pageSize: number = 30): Promise<ImagesResponse> {
-    const response = await fetch(`${API_BASE_URL}/images?page=${page}&page_size=${pageSize}`);
-    if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+export interface Filters {
+    actors: string[];
+    tags: string[];
+    years: string[];
+}
+
+export interface FetchImagesOptions {
+    page?: number;
+    pageSize?: number;
+    actor?: string;
+    tag?: string;
+    year?: string;
+}
+
+export async function fetchImages(options: FetchImagesOptions = {}): Promise<ImagesResponse> {
+    const {
+        page = 1,
+        pageSize = 40,
+        actor,
+        tag,
+        year
+    } = options;
+
+    const queryParams = new URLSearchParams({
+        page: page.toString(),
+        page_size: pageSize.toString()
+    });
+
+    // Add filter parameters if they exist
+    if (actor) queryParams.append('actor', actor);
+    if (tag) queryParams.append('tag', tag);
+    if (year) queryParams.append('year', year);
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/images?${queryParams.toString()}`);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch images: ${response.statusText}`);
+        }
+        const data = await response.json();
+        // Ensure each image has a URL
+        data.images = data.images.map((img: ImageData) => ({
+            ...img,
+            url: getImageUrl(img.id)
+        }));
+        return data;
+    } catch (error) {
+        console.error('Error fetching images:', error);
+        throw error;
     }
-    const data = await response.json();
-    // Ensure each image has a URL
-    data.images = data.images.map((img: ImageData) => ({
-        ...img,
-        url: getImageUrl(img.id)
-    }));
-    return data;
 }
 
 export function getImageUrl(imageId: string): string {
@@ -267,4 +304,17 @@ export async function exportImages(imageIds: string[]): Promise<Blob> {
     }
 
     return blob;
+}
+
+export async function getAvailableFilters(): Promise<Filters> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/filters`);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch filters: ${response.statusText}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching filters:', error);
+        throw error;
+    }
 } 

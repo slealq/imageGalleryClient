@@ -1,3 +1,13 @@
+---
+import FilterDrawer from '../components/FilterDrawer.astro';
+
+interface Props {
+	title: string;
+}
+
+const { title } = Astro.props;
+---
+
 <!doctype html>
 <html lang="en" class="h-full">
 	<head>
@@ -10,5 +20,6 @@
 	<body class="bg-[#1a1a1a] m-0 w-full h-full min-h-screen relative before:content-[''] before:fixed before:inset-0 before:w-full before:h-full before:bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] before:from-gray-700/30 before:via-gray-800/30 before:to-transparent before:opacity-100 before:pointer-events-none after:content-[''] after:fixed after:inset-0 after:w-full after:h-full after:bg-[conic-gradient(from_0deg_at_50%_50%,_var(--tw-gradient-stops))] after:from-gray-700/20 after:via-gray-800/20 after:to-gray-700/20 after:opacity-100 after:pointer-events-none">
 		<div class="fixed inset-0 w-full h-full bg-[url('data:image/svg+xml,%3Csvg_viewBox=%270_0_200_200%27_xmlns=%27http://www.w3.org/2000/svg%27%3E%3Cfilter_id=%27noiseFilter%27%3E%3CfeTurbulence_type=%27fractalNoise%27_baseFrequency=%270.65%27_numOctaves=%273%27_stitchTiles=%27stitch%27/%3E%3C/filter%3E%3Crect_width=%27100%25%27_height=%27100%25%27_filter=%27url(%23noiseFilter)%27/%3E%3C/svg%3E')] opacity-[0.03] pointer-events-none"></div>
 		<slot />
+		<FilterDrawer />
 	</body>
 </html>

@@ -310,10 +310,18 @@ declare global {
                                 console.log('After loading more:', {
                                     found: !!newNextImage,
                                     newNextImageId: newNextImage?.getId(),
-                                    newNextImageFilename: newNextImage?.getFilename()
+                                    newNextImageFilename: newNextImage?.getFilename(),
+                                    currentSequence: this.imageManager.getImageSequence(),
+                                    currentIndex: this.imageManager.getImageIndex(this.currentImageId)
                                 });
                                 if (newNextImage) {
                                     this.updateModalContent(newNextImage);
+                                } else {
+                                    console.log('Still no next image after loading more. Current sequence:', {
+                                        sequence: this.imageManager.getImageSequence(),
+                                        currentId: this.currentImageId,
+                                        currentIndex: this.imageManager.getImageIndex(this.currentImageId)
+                                    });
                                 }
                             }
                         }

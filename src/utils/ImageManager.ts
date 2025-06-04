@@ -16,6 +16,12 @@ export interface ImageMetadata {
     collection_name?: string;
 }
 
+export interface FilterState {
+    actor?: string;
+    tag?: string;
+    year?: string;
+}
+
 export class ImageData {
     private metadata: ImageMetadata;
     private properties: ImageProperties;
@@ -132,6 +138,7 @@ export class ImageManager {
     private images: Map<string, ImageData> = new Map();
     private imageSequence: string[] = []; // Array to maintain image order
     private baseUrl: string = API_BASE_URL;
+    private currentFilter: FilterState = {};
 
     private constructor() {}
 
@@ -260,6 +267,26 @@ export class ImageManager {
             console.error('Error exporting images:', error);
             throw error;
         }
+    }
+
+    public setFilter(filter: FilterState): void {
+        this.currentFilter = filter;
+        // Clear the sequence as we'll need to reload images with the new filter
+        this.imageSequence = [];
+    }
+
+    public getCurrentFilter(): FilterState {
+        return { ...this.currentFilter };
+    }
+
+    public clearFilter(): void {
+        this.currentFilter = {};
+        // Clear the sequence as we'll need to reload images without filters
+        this.imageSequence = [];
+    }
+
+    public hasActiveFilter(): boolean {
+        return Object.values(this.currentFilter).some(value => value !== undefined);
     }
 }
 
