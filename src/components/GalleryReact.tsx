@@ -176,7 +176,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
         }
       },
       {
-        rootMargin: '200px',
+        rootMargin: '2000px',
         threshold: 0.1
       }
     );
