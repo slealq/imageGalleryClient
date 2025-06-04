@@ -153,10 +153,14 @@ declare global {
         }
 
         private handleKeyDown(e: KeyboardEvent): void {
-            // If any modal is open, only handle Escape key
+            // If any modal is open, only handle Escape key and arrow keys
             if (this.isCaptionModalOpen || this.isCropModalOpen) {
                 if (e.key === 'Escape') {
                     this.closeModal();
+                } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                    // Always handle arrow keys for image navigation
+                    e.preventDefault();
+                    this.navigateImage(e.key === 'ArrowLeft' ? 'prev' : 'next');
                 }
                 return;
             }
@@ -167,9 +171,11 @@ declare global {
                     this.closeModal();
                     break;
                 case 'ArrowLeft':
+                    e.preventDefault();
                     this.navigateImage('prev');
                     break;
                 case 'ArrowRight':
+                    e.preventDefault();
                     this.navigateImage('next');
                     break;
                 case 'c':
@@ -271,22 +277,41 @@ declare global {
         }
 
         private async navigateImage(direction: 'next' | 'prev'): Promise<void> {
-            if (!this.currentImageId) return;
+            console.log('navigateImage called:', { direction, currentImageId: this.currentImageId });
+            
+            if (!this.currentImageId) {
+                console.log('No current image ID, returning');
+                return;
+            }
 
             const nextImage = direction === 'next' 
                 ? this.imageManager.getNextImage(this.currentImageId)
                 : this.imageManager.getPreviousImage(this.currentImageId);
+            
+            console.log('Next image result:', { 
+                found: !!nextImage,
+                nextImageId: nextImage?.getId(),
+                nextImageFilename: nextImage?.getFilename()
+            });
 
             if (!nextImage) {
+                console.log('No next image found, checking if we should load more');
                 // If we're at the end and trying to go next, try to load more
                 if (direction === 'next' && !this.isLoadingMore) {
+                    console.log('Attempting to load more images');
                     this.isLoadingMore = true;
                     try {
                         if (window.loadMoreImages) {
                             const success = await window.loadMoreImages();
+                            console.log('Load more result:', { success });
                             if (success) {
                                 // Try navigation again after loading more
                                 const newNextImage = this.imageManager.getNextImage(this.currentImageId);
+                                console.log('After loading more:', {
+                                    found: !!newNextImage,
+                                    newNextImageId: newNextImage?.getId(),
+                                    newNextImageFilename: newNextImage?.getFilename()
+                                });
                                 if (newNextImage) {
                                     this.updateModalContent(newNextImage);
                                 }
@@ -299,6 +324,7 @@ declare global {
                 return;
             }
 
+            console.log('Updating modal content with next image');
             this.updateModalContent(nextImage);
         }
 

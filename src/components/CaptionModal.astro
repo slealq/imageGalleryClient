@@ -292,6 +292,7 @@ const { imageId } = Astro.props;
 
             // Allow left/right arrows to pass through for image navigation
             if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                // Don't prevent default, let the event bubble up to the fullscreen modal
                 return;
             }
 
