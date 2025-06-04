@@ -61,7 +61,7 @@ A modern, interactive image gallery application built with Astro and React. This
 ## Gallery Features
 
 ### Image Viewing
-[Image of gallery view]
+![Gallery View](docs/imageGallery.png)
 
 - Grid and list view options
 - Responsive layout
@@ -69,7 +69,7 @@ A modern, interactive image gallery application built with Astro and React. This
 - Thumbnail previews
 
 ### Fullscreen Mode
-[Image of fullscreen view]
+![Fullscreen View](docs/fullscreen.png)
 
 - Zoom in/out functionality
 - Pan and drag support
@@ -77,11 +77,26 @@ A modern, interactive image gallery application built with Astro and React. This
 - Image information display
 
 ### Image Editing
-[Image of editing interface]
 
-- Crop images to desired dimensions
+#### Caption Editing
+![Caption Editing](docs/caption.png)
+
 - Add and edit image captions
 - Save changes to image metadata
+
+#### Image Cropping
+![Image Cropping](docs/crop.png)
+
+- Crop images to desired dimensions
+- Preview crop results
+- Maintain aspect ratio
+
+#### Export Options
+![Export Selection](docs/export_selection.png)
+
+- Select multiple images
+- Export as ZIP archive
+- Batch processing capabilities
 
 ## Technologies Used
 
