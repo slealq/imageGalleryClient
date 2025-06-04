@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'http://192.168.68.53:4322';
+export const API_BASE_URL = 'http://192.168.68.70:8001';
 
 export interface ImageData {
     id: string;
@@ -12,6 +12,7 @@ export interface ImageData {
     has_tags: boolean;
     has_crop: boolean;
     mime_type: string;
+    url?: string;
 }
 
 export interface ImagesResponse {
@@ -47,12 +48,18 @@ export interface CropResponse {
     imageUrl: string;
 }
 
-export async function fetchImages(page: number = 1, pageSize: number = 20): Promise<ImagesResponse> {
+export async function fetchImages(page: number = 1, pageSize: number = 30): Promise<ImagesResponse> {
     const response = await fetch(`${API_BASE_URL}/images?page=${page}&page_size=${pageSize}`);
     if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
     }
-    return response.json();
+    const data = await response.json();
+    // Ensure each image has a URL
+    data.images = data.images.map((img: ImageData) => ({
+        ...img,
+        url: getImageUrl(img.id)
+    }));
+    return data;
 }
 
 export function getImageUrl(imageId: string): string {

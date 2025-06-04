@@ -1,5 +1,6 @@
 ---
 import "../styles/global.css";
+import { API_BASE_URL } from "../utils/api";
 
 // const image_data = Astro.props;
 
@@ -20,7 +21,7 @@ interface Props {
 
 const { id, width, height, scale, filename, size, created_at } = Astro.props
 
-const url = "http://127.0.0.1:8000/images/" + id
+const url = `${API_BASE_URL}/images/${id}`
 ---
 
 <div class="group relative w-full h-full">

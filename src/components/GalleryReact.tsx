@@ -45,8 +45,10 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
       // Create ImageData objects and add them to ImageManager
       const newImages = await Promise.all(
         response.images.map(async (img: GalleryImageData) => {
+          const imageUrl = img.url || imageManager.current.getImageUrl(img.id);
+          console.log('Loading image:', { id: img.id, url: imageUrl }); // Debug log
           const imageData = await imageManager.current.createImageFromUrl(
-            img.url || '',
+            imageUrl,
             img.id,
             img.filename,
             img.size,
@@ -67,6 +69,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
       setHasMore(response.page < response.total_pages);
       setPage(pageNum);
     } catch (err) {
+      console.error('Error loading images:', err); // Debug log
       setError(err instanceof Error ? err.message : 'Failed to load images');
     } finally {
       setIsLoading(false);
@@ -164,16 +167,16 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && !isLoading && hasMore) {
-          // Calculate how many images we've shown so far
+          // Load more images when we're close to the end of the current page
           const totalImagesShown = images.length;
-          // If we've shown more than 75% of the current page size (20), load more
-          if (totalImagesShown > 15) {
+          // If we've shown more than 70% of the current page size (10), load more
+          if (totalImagesShown > 7) {
             loadMoreImages();
           }
         }
       },
       {
-        rootMargin: '500px',
+        rootMargin: '200px',
         threshold: 0.1
       }
     );
