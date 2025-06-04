@@ -20,6 +20,8 @@ export interface FilterState {
     actor?: string;
     tag?: string;
     year?: string;
+    has_caption?: boolean;
+    has_crop?: boolean;
 }
 
 export class ImageData {
@@ -270,9 +272,8 @@ export class ImageManager {
     }
 
     public setFilter(filter: FilterState): void {
-        this.currentFilter = filter;
-        // Clear the sequence as we'll need to reload images with the new filter
-        this.imageSequence = [];
+        this.currentFilter = { ...filter };
+        this.clearImageSequence();
     }
 
     public getCurrentFilter(): FilterState {
@@ -281,12 +282,15 @@ export class ImageManager {
 
     public clearFilter(): void {
         this.currentFilter = {};
-        // Clear the sequence as we'll need to reload images without filters
-        this.imageSequence = [];
+        this.clearImageSequence();
     }
 
     public hasActiveFilter(): boolean {
-        return Object.values(this.currentFilter).some(value => value !== undefined);
+        return Object.values(this.currentFilter).some(value => value !== undefined && value !== '');
+    }
+
+    private clearImageSequence(): void {
+        this.imageSequence = [];
     }
 }
 

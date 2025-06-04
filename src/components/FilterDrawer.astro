@@ -50,6 +50,36 @@ const filters: Filters = await getAvailableFilters();
                 </select>
             </div>
 
+            <!-- Has Caption Filter -->
+            <div>
+                <h3 class="text-sm font-medium text-gray-700 mb-2">Caption Status</h3>
+                <div class="flex items-center">
+                    <input
+                        type="checkbox"
+                        id="has-caption-filter"
+                        class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label for="has-caption-filter" class="ml-2 block text-sm text-gray-700">
+                        Only show images with captions
+                    </label>
+                </div>
+            </div>
+
+            <!-- Has Crop Filter -->
+            <div>
+                <h3 class="text-sm font-medium text-gray-700 mb-2">Crop Status</h3>
+                <div class="flex items-center">
+                    <input
+                        type="checkbox"
+                        id="has-crop-filter"
+                        class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label for="has-crop-filter" class="ml-2 block text-sm text-gray-700">
+                        Only show images with crops
+                    </label>
+                </div>
+            </div>
+
             <!-- Apply Filters Button -->
             <button id="apply-filters" class="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors">
                 Apply Filters
@@ -72,6 +102,8 @@ const filters: Filters = await getAvailableFilters();
         private actorSelect: HTMLSelectElement | null = null;
         private tagSelect: HTMLSelectElement | null = null;
         private yearSelect: HTMLSelectElement | null = null;
+        private hasCaptionCheckbox: HTMLInputElement | null = null;
+        private hasCropCheckbox: HTMLInputElement | null = null;
 
         constructor() {
             this.initializeElements();
@@ -87,6 +119,8 @@ const filters: Filters = await getAvailableFilters();
             this.actorSelect = document.getElementById('actor-filter') as HTMLSelectElement;
             this.tagSelect = document.getElementById('tag-filter') as HTMLSelectElement;
             this.yearSelect = document.getElementById('year-filter') as HTMLSelectElement;
+            this.hasCaptionCheckbox = document.getElementById('has-caption-filter') as HTMLInputElement;
+            this.hasCropCheckbox = document.getElementById('has-crop-filter') as HTMLInputElement;
         }
 
         private setupEventListeners(): void {
@@ -99,13 +133,17 @@ const filters: Filters = await getAvailableFilters();
             if (this.actorSelect && currentFilter.actor) this.actorSelect.value = currentFilter.actor;
             if (this.tagSelect && currentFilter.tag) this.tagSelect.value = currentFilter.tag;
             if (this.yearSelect && currentFilter.year) this.yearSelect.value = currentFilter.year;
+            if (this.hasCaptionCheckbox) this.hasCaptionCheckbox.checked = currentFilter.has_caption || false;
+            if (this.hasCropCheckbox) this.hasCropCheckbox.checked = currentFilter.has_crop || false;
         }
 
         private applyFilters(): void {
             const filter = {
                 actor: this.actorSelect?.value || undefined,
                 tag: this.tagSelect?.value || undefined,
-                year: this.yearSelect?.value || undefined
+                year: this.yearSelect?.value || undefined,
+                has_caption: this.hasCaptionCheckbox?.checked || undefined,
+                has_crop: this.hasCropCheckbox?.checked || undefined
             };
 
             window.imageManager.setFilter(filter);
@@ -120,6 +158,8 @@ const filters: Filters = await getAvailableFilters();
             if (this.actorSelect) this.actorSelect.value = '';
             if (this.tagSelect) this.tagSelect.value = '';
             if (this.yearSelect) this.yearSelect.value = '';
+            if (this.hasCaptionCheckbox) this.hasCaptionCheckbox.checked = false;
+            if (this.hasCropCheckbox) this.hasCropCheckbox.checked = false;
             this.closeDrawer();
             
             // Trigger a reload of the gallery

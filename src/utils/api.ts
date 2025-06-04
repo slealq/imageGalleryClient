@@ -58,37 +58,37 @@ export interface Filters {
     years: string[];
 }
 
-export interface FetchImagesOptions {
+interface FetchImagesParams {
     page?: number;
-    pageSize?: number;
     actor?: string;
     tag?: string;
     year?: string;
+    has_caption?: boolean;
+    has_crop?: boolean;
 }
 
-export async function fetchImages(options: FetchImagesOptions = {}): Promise<ImagesResponse> {
-    const {
-        page = 1,
-        pageSize = 40,
-        actor,
-        tag,
-        year
-    } = options;
-
-    const queryParams = new URLSearchParams({
+export async function fetchImages({ 
+    page = 1, 
+    actor, 
+    tag, 
+    year, 
+    has_caption, 
+    has_crop 
+}: FetchImagesParams = {}): Promise<ImagesResponse> {
+    const params = new URLSearchParams({
         page: page.toString(),
-        page_size: pageSize.toString()
     });
 
-    // Add filter parameters if they exist
-    if (actor) queryParams.append('actor', actor);
-    if (tag) queryParams.append('tag', tag);
-    if (year) queryParams.append('year', year);
+    if (actor) params.append('actor', actor);
+    if (tag) params.append('tag', tag);
+    if (year) params.append('year', year);
+    if (has_caption !== undefined) params.append('has_caption', has_caption.toString());
+    if (has_crop !== undefined) params.append('has_crop', has_crop.toString());
 
     try {
-        const response = await fetch(`${API_BASE_URL}/images?${queryParams.toString()}`);
+        const response = await fetch(`${API_BASE_URL}/images?${params.toString()}`);
         if (!response.ok) {
-            throw new Error(`Failed to fetch images: ${response.statusText}`);
+            throw new Error('Failed to fetch images');
         }
         const data = await response.json();
         // Ensure each image has a URL
