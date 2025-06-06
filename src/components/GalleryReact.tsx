@@ -1,9 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import type { ImageData, Row } from '../types/gallery';
-import { processImages } from '../utils/imageProcessing';
-import { fetchImages } from '../utils/api';
+import { fetchImages, API_BASE_URL } from '../utils/api';
 import { ImageManager, ImageData as ManagerImageData } from '../utils/ImageManager';
 import type { ImageData as GalleryImageData } from '../types/gallery';
+import { fetchImagesBatch } from '../utils/api';
 
 interface GalleryReactProps {
   initialImages: GalleryImageData[];
@@ -17,7 +16,7 @@ declare global {
     }
 }
 
-const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotalPages }) => {
+const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
   const [images, setImages] = useState<ManagerImageData[]>([]);
   const [selectedCount, setSelectedCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -27,14 +26,68 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
   const [exportError, setExportError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const imageManager = useRef<ImageManager>(ImageManager.getInstance());
-  const observer = useRef<IntersectionObserver | null>(null);
   const lastImageRef = useRef<HTMLDivElement | null>(null);
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
+  const imageCache = useRef<Map<string, string>>(new Map());
+  const preloadedPages = useRef<Set<number>>(new Set());
+  const isPreloading = useRef<boolean>(false);
 
   // Function to update image order in ImageManager
   const updateImageManagerSequence = useCallback((newImages: ManagerImageData[]) => {
     const imageIds = newImages.map(img => img.getId());
     imageManager.current.setImageSequence(imageIds);
   }, []);
+
+  // Function to preload next pages
+  const preloadNextPages = useCallback(async (currentPage: number) => {
+    if (isPreloading.current || !hasMore) return;
+    
+    isPreloading.current = true;
+    try {
+      const currentFilter = imageManager.current.getCurrentFilter();
+      
+      console.log(`Preloading pages starting from ${currentPage + 1}`);
+      const responses = await fetchImagesBatch({ 
+        startPage: currentPage + 1,
+        numPages: 3,
+        ...currentFilter
+      });
+      
+      for (const response of responses) {
+        if (!response.images.length) continue;
+        
+        const pageNum = response.page;
+        if (preloadedPages.current.has(pageNum)) continue;
+        
+        // Create ImageData objects and add them to ImageManager
+        const newImages = await Promise.all(
+          response.images.map(async (img: GalleryImageData) => {
+            const imageUrl = img.url || imageManager.current.getImageUrl(img.id);
+            return imageManager.current.createImageFromUrl(
+              imageUrl,
+              img.id,
+              img.filename,
+              img.size,
+              img.created_at,
+              img.has_caption,
+              img.has_crop,
+              img.has_tags
+            );
+          })
+        );
+        
+        // Update the sequence in ImageManager
+        updateImageManagerSequence(newImages);
+        preloadedPages.current.add(pageNum);
+        
+        console.log(`Preloaded page ${pageNum} with ${newImages.length} images`);
+      }
+    } catch (error) {
+      console.error('Error preloading pages:', error);
+    } finally {
+      isPreloading.current = false;
+    }
+  }, [hasMore, updateImageManagerSequence]);
 
   const loadImages = useCallback(async (pageNum: number) => {
     try {
@@ -52,13 +105,16 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
       const newImages = await Promise.all(
         response.images.map(async (img: GalleryImageData) => {
           const imageUrl = img.url || imageManager.current.getImageUrl(img.id);
-          console.log('Loading image:', { id: img.id, url: imageUrl }); // Debug log
+          console.log('Loading image:', { id: img.id, url: imageUrl });
           const imageData = await imageManager.current.createImageFromUrl(
             imageUrl,
             img.id,
             img.filename,
             img.size,
-            img.created_at
+            img.created_at,
+            img.has_caption,
+            img.has_crop,
+            img.has_tags
           );
           return imageData;
         })
@@ -88,13 +144,18 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
       
       setHasMore(response.page < response.total_pages);
       setPage(pageNum);
+
+      // Start preloading next pages
+      if (response.page < response.total_pages) {
+        preloadNextPages(pageNum);
+      }
     } catch (err) {
-      console.error('Error loading images:', err); // Debug log
+      console.error('Error loading images:', err);
       setError(err instanceof Error ? err.message : 'Failed to load images');
     } finally {
       setIsLoading(false);
     }
-  }, [updateImageManagerSequence]);
+  }, [updateImageManagerSequence, preloadNextPages]);
 
   // Initialize images in ImageManager
   useEffect(() => {
@@ -109,7 +170,10 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
             image.id,
             image.filename,
             image.size,
-            image.created_at
+            image.created_at,
+            image.has_caption,
+            image.has_crop,
+            image.has_tags
           );
           newImages.push(imageData);
         } catch (error) {
@@ -118,10 +182,13 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
       }
       setImages(newImages);
       updateImageManagerSequence(newImages);
+      
+      // Start preloading next pages after initialization
+      preloadNextPages(1);
     };
 
     initializeImages();
-  }, [initialImages, updateImageManagerSequence]);
+  }, [initialImages, updateImageManagerSequence, preloadNextPages]);
 
   const loadMoreImages = useCallback(async (): Promise<boolean> => {
     if (isLoading || !hasMore) return false;
@@ -278,6 +345,16 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
     return () => window.removeEventListener('filtersChanged', handleFilterChange);
   }, [loadImages]);
 
+  // Function to get a low-quality preview URL
+  const getPreviewUrl = useCallback((imageId: string) => {
+    return `${API_BASE_URL}/images/${imageId}/preview/50`; // 50px preview
+  }, []);
+
+  // Function to handle image loading
+  const handleImageLoad = useCallback((imageId: string) => {
+    setLoadedImages(prev => new Set([...prev, imageId]));
+  }, []);
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-4">
@@ -320,6 +397,8 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
           const imageUrl = image.getUrl();
           const metadata = image.getMetadata();
           const properties = image.getProperties();
+          const imageId = metadata.id;
+          const isLoaded = loadedImages.has(imageId);
           
           return (
             <div
@@ -329,11 +408,24 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages, initialTotal
               onClick={() => handleImageClick(image)}
             >
               <div className="aspect-square relative overflow-hidden">
+                {/* Low quality preview */}
+                <img
+                  src={getPreviewUrl(imageId)}
+                  alt={metadata.filename}
+                  className={`w-full h-full object-cover blur-lg transition-opacity duration-300 ${
+                    isLoaded ? 'opacity-0' : 'opacity-100'
+                  }`}
+                  loading="lazy"
+                />
+                {/* High quality image */}
                 <img
                   src={imageUrl}
                   alt={metadata.filename}
-                  className="w-full h-full object-cover"
+                  className={`w-full h-full object-cover absolute top-0 left-0 transition-opacity duration-300 ${
+                    isLoaded ? 'opacity-100' : 'opacity-0'
+                  }`}
                   loading="lazy"
+                  onLoad={() => handleImageLoad(imageId)}
                 />
                 {/* Status indicators */}
                 <div className="absolute top-2 left-2 flex gap-1">

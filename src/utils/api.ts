@@ -1,5 +1,81 @@
 export const API_BASE_URL = 'http://192.168.68.70:8001';
 
+// Add logging utility
+const logApiCall = (caller: string, endpoint: string, startTime: number, success: boolean, error?: any) => {
+    const duration = Date.now() - startTime;
+    const durationFormatted = duration > 1000 
+        ? `${(duration / 1000).toFixed(2)}s` 
+        : `${duration}ms`;
+    
+    // Extract image ID from endpoint if it exists
+    const imageIdMatch = endpoint.match(/\/images\/([^\/]+)/);
+    const imageId = imageIdMatch ? imageIdMatch[1] : null;
+    
+    const logMessage = {
+        timestamp: new Date().toISOString(),
+        caller: caller.replace('.ts', ''), // Remove .ts extension for cleaner logs
+        endpoint: endpoint.split('/').pop() || endpoint, // Show just the last part of the endpoint
+        fullEndpoint: endpoint, // Keep the full endpoint for reference
+        duration: durationFormatted,
+        success,
+        ...(imageId && { imageId }), // Include imageId if available
+        ...(error && { 
+            error: error.message || error,
+            status: error.status,
+            statusText: error.statusText
+        })
+    };
+
+    // Use console.group for better organization
+    console.group(`📡 API Call: ${logMessage.caller} → ${logMessage.endpoint} (${logMessage.duration})`);
+    console.log('Details:', logMessage);
+    if (error) {
+        console.error('Error:', error);
+    }
+    console.groupEnd();
+};
+
+// Improved caller detection
+const getCallerName = () => {
+    try {
+        const stack = new Error().stack;
+        if (!stack) return 'unknown';
+        
+        // Split stack into lines and remove empty lines
+        const stackLines = stack.split('\n').filter(line => line.trim());
+        
+        // Look for the first line that's not from our api.ts file
+        for (let i = 0; i < stackLines.length; i++) {
+            const line = stackLines[i];
+            // Skip lines from api.ts
+            if (line.includes('api.ts')) continue;
+            
+            // Try to extract component name
+            const componentMatch = line.match(/at\s+(\w+)\s+\(/);
+            if (componentMatch) {
+                return componentMatch[1];
+            }
+            
+            // Try to extract function name
+            const functionMatch = line.match(/at\s+(\w+)/);
+            if (functionMatch) {
+                return functionMatch[1];
+            }
+        }
+        
+        // If we can't find a specific caller, return the first non-api.ts line
+        const firstNonApiLine = stackLines.find(line => !line.includes('api.ts'));
+        if (firstNonApiLine) {
+            return firstNonApiLine.split('/').pop()?.split(':')[0] || 'unknown';
+        }
+        
+        return 'unknown';
+    } catch (error) {
+        console.error('Error getting caller name:', error);
+        return 'unknown';
+    }
+};
+
 export interface ImageData {
     id: string;
     filename: string;
@@ -67,6 +143,16 @@ interface FetchImagesParams {
     has_crop?: boolean;
 }
 
+interface FetchImagesBatchParams {
+    startPage?: number;
+    numPages?: number;
+    actor?: string;
+    tag?: string;
+    year?: string;
+    has_caption?: boolean;
+    has_crop?: boolean;
+}
+
 export async function fetchImages({ 
     page = 1, 
     actor, 
@@ -75,6 +161,8 @@ export async function fetchImages({
     has_caption, 
     has_crop 
 }: FetchImagesParams = {}): Promise<ImagesResponse> {
+    const startTime = Date.now();
+    const caller = getCallerName();
     const params = new URLSearchParams({
         page: page.toString(),
     });
@@ -96,9 +184,51 @@ export async function fetchImages({
             ...img,
             url: getImageUrl(img.id)
         }));
+        logApiCall(caller, '/images', startTime, true);
         return data;
     } catch (error) {
+        logApiCall(caller, '/images', startTime, false, error);
         console.error('Error fetching images:', error);
+        throw error;
+    }
+}
+
+export async function fetchImagesBatch({ 
+    startPage = 1, 
+    numPages = 3,
+    actor, 
+    tag, 
+    year, 
+    has_caption, 
+    has_crop 
+}: FetchImagesBatchParams = {}): Promise<ImagesResponse[]> {
+    const params = new URLSearchParams({
+        start_page: startPage.toString(),
+        num_pages: numPages.toString(),
+    });
+
+    if (actor) params.append('actor', actor);
+    if (tag) params.append('tag', tag);
+    if (year) params.append('year', year);
+    if (has_caption !== undefined) params.append('has_caption', has_caption.toString());
+    if (has_crop !== undefined) params.append('has_crop', has_crop.toString());
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/images/batch?${params.toString()}`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch images batch');
+        }
+        const data = await response.json();
+        // Ensure each image has a URL
+        return data.map((page: ImagesResponse) => ({
+            ...page,
+            images: page.images.map((img: ImageData) => ({
+                ...img,
+                url: getImageUrl(img.id)
+            }))
+        }));
+    } catch (error) {
+        console.error('Error fetching images batch:', error);
         throw error;
     }
 }
@@ -108,15 +238,24 @@ export function getImageUrl(imageId: string): string {
 }
 
 export async function getImageCaption(imageId: string): Promise<string> {
-    const response = await fetch(`${API_BASE_URL}/images/${imageId}/caption`);
-    if (!response.ok) {
-        if (response.status === 404) {
-            return '';
+    const startTime = Date.now();
+    const caller = getCallerName();
+    try {
+        const response = await fetch(`${API_BASE_URL}/images/${imageId}/caption`);
+        if (!response.ok) {
+            if (response.status === 404) {
+                logApiCall(caller, `/images/${imageId}/caption`, startTime, true);
+                return '';
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const data: CaptionResponse = await response.json();
+        logApiCall(caller, `/images/${imageId}/caption`, startTime, true);
+        return data.caption;
+    } catch (error) {
+        logApiCall(caller, `/images/${imageId}/caption`, startTime, false, error);
+        throw error;
     }
-    const data: CaptionResponse = await response.json();
-    return data.caption;
 }
 
 export async function saveImageCaption(imageId: string, caption: string): Promise<void> {
@@ -161,6 +300,8 @@ export async function streamImageCaption(
     onComplete: (finalCaption: string) => void,
     onError: (error: Error) => void
 ): Promise<void> {
+    const startTime = Date.now();
+    const caller = getCallerName();
     try {
         const response = await fetch(`${API_BASE_URL}/api/stream-caption/${imageId}`, {
             method: 'POST',
@@ -180,7 +321,7 @@ export async function streamImageCaption(
         }
 
         const decoder = new TextDecoder();
-        let accumulatedCaption = '';  // Accumulate all chunks
+        let accumulatedCaption = '';
 
         while (true) {
             const { done, value } = await reader.read();
@@ -194,8 +335,8 @@ export async function streamImageCaption(
                     try {
                         const data = JSON.parse(line.slice(6));
                         if (data.chunk) {
-                            accumulatedCaption += data.chunk;  // Append new chunk
-                            onChunk(accumulatedCaption);  // Send the accumulated text
+                            accumulatedCaption += data.chunk;
+                            onChunk(accumulatedCaption);
                         } else if (data.error) {
                             throw new Error(data.error);
                         }
@@ -206,8 +347,10 @@ export async function streamImageCaption(
             }
         }
         
+        logApiCall(caller, `/api/stream-caption/${imageId}`, startTime, true);
         onComplete(accumulatedCaption);
     } catch (error) {
+        logApiCall(caller, `/api/stream-caption/${imageId}`, startTime, false, error);
         onError(error instanceof Error ? error : new Error('Unknown error occurred'));
     }
 }
@@ -217,31 +360,40 @@ export function getImagePreviewUrl(imageId: string, targetSize: number): string 
 }
 
 export async function cropImage(imageId: string, targetSize: number, normalizedDeltas: NormalizedDeltas): Promise<Blob> {
-    const response = await fetch (
-        `${API_BASE_URL}/images/${imageId}/crop`, 
-        {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(
-                { 
-                    "imageId": imageId, 
-                    "targetSize": targetSize,  
-                    "normalizedDeltas": {
-                        "x": normalizedDeltas.x,
-                        "y": normalizedDeltas.y
-                    } 
-                }
-            ),
+    const startTime = Date.now();
+    const caller = getCallerName();
+    try {
+        const response = await fetch(
+            `${API_BASE_URL}/images/${imageId}/crop`, 
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(
+                    { 
+                        "imageId": imageId, 
+                        "targetSize": targetSize,  
+                        "normalizedDeltas": {
+                            "x": normalizedDeltas.x,
+                            "y": normalizedDeltas.y
+                        } 
+                    }
+                ),
+            }
+        );
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
-    );
-    
-    if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        
+        const blob = await response.blob();
+        logApiCall(caller, `/images/${imageId}/crop`, startTime, true);
+        return blob;
+    } catch (error) {
+        logApiCall(caller, `/images/${imageId}/crop`, startTime, false, error);
+        throw error;
     }
-    
-    return response.blob();
 }
 
 export async function getCrop(imageId: string): Promise<CropResponse> {
@@ -256,20 +408,29 @@ export async function getCrop(imageId: string): Promise<CropResponse> {
 }
 
 export async function getCroppedImage(imageId: string): Promise<Blob> {
-    const timestamp = new Date().getTime();
-    const response = await fetch(`${API_BASE_URL}/images/${imageId}/cropped?t=${timestamp}`, {
-        cache: 'no-store',
-        headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
+    const startTime = Date.now();
+    const caller = getCallerName();
+    try {
+        const timestamp = new Date().getTime();
+        const response = await fetch(`${API_BASE_URL}/images/${imageId}/cropped?t=${timestamp}`, {
+            cache: 'no-store',
+            headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
-    });
-    
-    if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        
+        const blob = await response.blob();
+        logApiCall(caller, `/images/${imageId}/cropped`, startTime, true);
+        return blob;
+    } catch (error) {
+        logApiCall(caller, `/images/${imageId}/cropped`, startTime, false, error);
+        throw error;
     }
-    
-    return response.blob();
 }
 
 export async function exportImages(imageIds: string[]): Promise<Blob> {

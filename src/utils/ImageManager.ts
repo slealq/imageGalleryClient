@@ -14,6 +14,9 @@ export interface ImageMetadata {
     size: number;
     created: string;
     collection_name?: string;
+    has_caption?: boolean;
+    has_crop?: boolean;
+    has_tags?: boolean;
 }
 
 export interface FilterState {
@@ -33,18 +36,22 @@ export class ImageData {
     constructor(metadata: ImageMetadata) {
         this.metadata = metadata;
         this.properties = {
-            has_caption: false,
-            has_tags: false,
-            has_crop: false,
+            has_caption: metadata.has_caption || false,
+            has_tags: metadata.has_tags || false,
+            has_crop: metadata.has_crop || false,
             is_selected: false
         };
     }
 
     async initialize() {
-        await Promise.all([
-            this.fetchCaption(),
-            this.fetchCropInfo()
-        ]);
+        // Only fetch caption if we know the image has one
+        if (this.properties.has_caption) {
+            await this.fetchCaption();
+        }
+        // Only fetch crop info if we know the image has one
+        if (this.properties.has_crop) {
+            await this.fetchCropInfo();
+        }
     }
 
     private async fetchCaption() {
@@ -186,13 +193,25 @@ export class ImageManager {
         return this.images.get(id)?.getProperties();
     }
 
-    async createImageFromUrl(url: string, id: string, filename: string, size: number, created: string): Promise<ImageData> {
+    async createImageFromUrl(
+        url: string, 
+        id: string, 
+        filename: string, 
+        size: number, 
+        created: string,
+        has_caption?: boolean,
+        has_crop?: boolean,
+        has_tags?: boolean
+    ): Promise<ImageData> {
         const metadata: ImageMetadata = {
             id,
             url,
             filename,
             size,
-            created
+            created,
+            has_caption,
+            has_crop,
+            has_tags
         };
         return this.addImage(metadata);
     }
