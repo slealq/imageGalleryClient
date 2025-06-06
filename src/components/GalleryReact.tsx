@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { fetchImages, API_BASE_URL } from '../utils/api';
-import { ImageManager, ImageData as ManagerImageData } from '../utils/ImageManager';
+import { fetchImages } from '../utils/api';
+import { ImageManager, ImageWrapper } from '../utils/ImageManager';
 import type { ImageData as GalleryImageData } from '../types/gallery';
 import { fetchImagesBatch } from '../utils/api';
 
@@ -17,7 +17,7 @@ declare global {
 }
 
 const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
-  const [images, setImages] = useState<ManagerImageData[]>([]);
+  const [images, setImages] = useState<ImageWrapper[]>([]);
   const [selectedCount, setSelectedCount] = useState(0);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -33,7 +33,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
   const isPreloading = useRef<boolean>(false);
 
   // Function to update image order in ImageManager
-  const updateImageManagerSequence = useCallback((newImages: ManagerImageData[]) => {
+  const updateImageManagerSequence = useCallback((newImages: ImageWrapper[]) => {
     const imageIds = newImages.map(img => img.getId());
     imageManager.current.setImageSequence(imageIds);
   }, []);
@@ -329,7 +329,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
     if (!imageManager.current) return;
 
     const initializeImages = async () => {
-      const newImages: ManagerImageData[] = [];
+      const newImages: ImageWrapper[] = [];
       for (const image of initialImages) {
         try {
           const imageData = await imageManager.current.createImageFromUrl(
@@ -462,7 +462,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
     }
   };
 
-  const handleImageClick = (image: ManagerImageData) => {
+  const handleImageClick = (image: ImageWrapper) => {
     if (!imageManager.current) return;
 
     // Log for debugging
@@ -482,8 +482,8 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
         image.getMetadata().size.toString(),
         image.getMetadata().created,
         image.getId(),
-        image.getProperties().has_caption,
-        image.getProperties().has_tags,
+        image.getMetadata().has_caption || false,
+        image.getMetadata().has_tags || false,
         image.getMetadata().collection_name || ''
       );
     }
@@ -560,7 +560,6 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
           const isSelected = image.isSelected();
           const imageUrl = image.getUrl();
           const metadata = image.getMetadata();
-          const properties = image.getProperties();
           const imageId = metadata.id;
           const isLoaded = loadedImages.has(imageId);
           
@@ -588,10 +587,10 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
                 )}
                 {/* Status indicators */}
                 <div className="absolute top-2 left-2 flex gap-1">
-                  {properties.has_caption && (
+                  {metadata.has_caption && (
                     <div className="w-2 h-2 rounded-full bg-blue-500 border border-white shadow-sm"></div>
                   )}
-                  {properties.has_crop && (
+                  {metadata.has_crop && (
                     <div className="w-2 h-2 rounded-full bg-purple-500 border border-white shadow-sm"></div>
                   )}
                 </div>

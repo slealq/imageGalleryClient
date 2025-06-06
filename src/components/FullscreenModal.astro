@@ -1,13 +1,10 @@
 ---
 import CaptionModal from './CaptionModal.astro';
 import CropModal from './CropModal.astro';
-import { ImageManager, ImageData } from '../utils/ImageManager';
 
 interface Props {
     imageUrl?: string;
 }
-
-const { imageUrl } = Astro.props;
 
 // Add TypeScript interface for window
 declare global {
@@ -24,7 +21,6 @@ declare global {
         ) => void;
         openDrawer?: () => void;
         loadMoreImages?: () => Promise<boolean>;
-        imageManager: ImageManager;
     }
 }
 ---
@@ -83,7 +79,7 @@ declare global {
 <CropModal imageId="" />
 
 <script>
-    import { ImageManager, ImageData } from '../utils/ImageManager';
+    import { ImageManager, ImageWrapper } from '../utils/ImageManager';
 
     class FullscreenHandler {
         private modal: HTMLElement | null = null;
@@ -261,7 +257,7 @@ declare global {
             const captionStatusDot = document.querySelector('#caption-status .w-2');
             const captionStatusText = document.querySelector('#caption-status span:last-child');
             if (captionStatusDot && captionStatusText) {
-                const hasCaption = image.getProperties()?.has_caption || false;
+                const hasCaption = image.getMetadata()?.has_caption || false;
                 captionStatusDot.className = `w-2 h-2 rounded-full ${hasCaption ? 'bg-green-500' : 'bg-red-500'}`;
                 captionStatusText.textContent = hasCaption ? 'Has Caption' : 'No Caption';
             }
@@ -270,7 +266,7 @@ declare global {
             const cropStatusDot = document.querySelector('#crop-status .w-2');
             const cropStatusText = document.querySelector('#crop-status span:last-child');
             if (cropStatusDot && cropStatusText) {
-                const hasCrop = image.getProperties()?.has_crop || false;
+                const hasCrop = image.getMetadata()?.has_crop || false;
                 cropStatusDot.className = `w-2 h-2 rounded-full ${hasCrop ? 'bg-green-500' : 'bg-red-500'}`;
                 cropStatusText.textContent = hasCrop ? 'Has Crop' : 'No Crop';
             }
@@ -336,7 +332,7 @@ declare global {
             this.updateModalContent(nextImage);
         }
 
-        private updateModalContent(image: ImageData): void {
+        private updateModalContent(image: ImageWrapper): void {
             this.currentImageId = image.getId();
             
             if (this.modalImage) {
