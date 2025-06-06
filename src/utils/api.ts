@@ -153,6 +153,21 @@ interface FetchImagesBatchParams {
     has_crop?: boolean;
 }
 
+interface WarmupCacheParams {
+    startPage?: number;
+    numPages?: number;
+    actor?: string;
+    tag?: string;
+    year?: string;
+    has_caption?: boolean;
+    has_crop?: boolean;
+}
+
+interface WarmupCacheResponse {
+    status: number;
+    hasMorePages: boolean;
+}
+
 export async function fetchImages({ 
     page = 1, 
     actor, 
@@ -476,6 +491,48 @@ export async function getAvailableFilters(): Promise<Filters> {
         return await response.json();
     } catch (error) {
         console.error('Error fetching filters:', error);
+        throw error;
+    }
+}
+
+export async function warmupCache({ 
+    startPage = 1, 
+    numPages = 3,
+    actor, 
+    tag, 
+    year, 
+    has_caption, 
+    has_crop 
+}: WarmupCacheParams = {}): Promise<WarmupCacheResponse> {
+    const startTime = Date.now();
+    const caller = getCallerName();
+    
+    const requestBody = {
+        start_page: startPage,
+        num_pages: numPages,
+        ...(actor && { actor }),
+        ...(tag && { tag }),
+        ...(year && { year }),
+        ...(has_caption !== undefined && { has_caption }),
+        ...(has_crop !== undefined && { has_crop })
+    };
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/cache/warmup`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
+        });
+        logApiCall(caller, '/cache/warmup', startTime, response.ok);
+        return {
+            status: response.status,
+            hasMorePages: response.ok
+        };
+    } catch (error) {
+        logApiCall(caller, '/cache/warmup', startTime, false, error);
+        console.error('Error warming up cache:', error);
         throw error;
     }
 } 

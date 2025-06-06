@@ -1,4 +1,4 @@
-import { getImageCaption, saveImageCaption, getCroppedImage, getImageUrl, getCrop, API_BASE_URL, exportImages } from './api';
+import { getImageCaption, saveImageCaption, getCroppedImage, getImageUrl, getCrop, API_BASE_URL, exportImages, warmupCache } from './api';
 
 export interface ImageProperties {
     has_caption: boolean;
@@ -148,6 +148,7 @@ export class ImageManager {
     private imageSequence: string[] = []; // Array to maintain image order
     private baseUrl: string = API_BASE_URL;
     private currentFilter: FilterState = {};
+    private warmupInProgress: boolean = false;
 
     private constructor() {}
 
@@ -293,6 +294,7 @@ export class ImageManager {
     public setFilter(filter: FilterState): void {
         this.currentFilter = { ...filter };
         this.clearImageSequence();
+        this.startWarmup();
     }
 
     public getCurrentFilter(): FilterState {
@@ -310,6 +312,45 @@ export class ImageManager {
 
     private clearImageSequence(): void {
         this.imageSequence = [];
+    }
+
+    private async startWarmup(): Promise<void> {
+        if (this.warmupInProgress) {
+            console.log('Cache warmup already in progress, skipping...');
+            return;
+        }
+
+        console.log('Starting cache warmup with filters:', this.currentFilter);
+        this.warmupInProgress = true;
+        let currentPage = 1;
+        const pageSize = 3; // Number of pages to warmup at once
+        let hasMorePages = true;
+
+        try {
+            while (hasMorePages) {
+                console.log(`Warming up cache for pages ${currentPage} to ${currentPage + pageSize - 1}...`);
+                const response = await warmupCache({
+                    startPage: currentPage,
+                    numPages: pageSize,
+                    ...this.currentFilter
+                });
+
+                if (!response.hasMorePages) {
+                    console.log('No more pages to warm up');
+                    hasMorePages = false;
+                    break;
+                }
+
+                console.log(`Successfully warmed up pages ${currentPage} to ${currentPage + pageSize - 1}`);
+                currentPage += pageSize;
+            }
+            console.log('Cache warmup completed successfully');
+        } catch (error) {
+            console.error('Error during cache warmup:', error);
+        } finally {
+            this.warmupInProgress = false;
+            console.log('Cache warmup process finished');
+        }
     }
 }
 
