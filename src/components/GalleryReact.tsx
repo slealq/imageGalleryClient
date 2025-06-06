@@ -28,7 +28,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
   const imageManager = useRef<ImageManager>(ImageManager.getInstance());
   const lastImageRef = useRef<HTMLDivElement | null>(null);
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
-  const imageCache = useRef<Map<string, string>>(new Map());
+  const imageCache = useRef<Map<string, number>>(new Map());
   const preloadedPages = useRef<Set<number>>(new Set());
   const isPreloading = useRef<boolean>(false);
 
@@ -43,15 +43,18 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
     if (isPreloading.current || !hasMore) return;
     
     isPreloading.current = true;
+    const preloadStartTime = performance.now();
     try {
       const currentFilter = imageManager.current.getCurrentFilter();
       
       console.log(`Preloading pages starting from ${currentPage + 1}`);
+      const fetchStartTime = performance.now();
       const responses = await fetchImagesBatch({ 
         startPage: currentPage + 1,
         numPages: 3,
         ...currentFilter
       });
+      console.log(`Fetch batch took ${(performance.now() - fetchStartTime).toFixed(2)}ms`);
       
       for (const response of responses) {
         if (!response.images.length) continue;
@@ -59,11 +62,27 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
         const pageNum = response.page;
         if (preloadedPages.current.has(pageNum)) continue;
         
+        const pageStartTime = performance.now();
         // Create ImageData objects and add them to ImageManager
         const newImages = await Promise.all(
           response.images.map(async (img: GalleryImageData) => {
             const imageUrl = img.url || imageManager.current.getImageUrl(img.id);
-            return imageManager.current.createImageFromUrl(
+            const imageStartTime = performance.now();
+            
+            // Pre-fetch the image to improve perceived performance
+            const preloadLink = document.createElement('link');
+            preloadLink.rel = 'preload';
+            preloadLink.as = 'image';
+            preloadLink.href = imageUrl;
+            document.head.appendChild(preloadLink);
+            
+            console.log(`[Image Creation] Starting for ${img.id}`, {
+              timestamp: new Date().toISOString(),
+              url: imageUrl
+            });
+            
+            const createStartTime = performance.now();
+            const imageData = await imageManager.current.createImageFromUrl(
               imageUrl,
               img.id,
               img.filename,
@@ -73,39 +92,145 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
               img.has_crop,
               img.has_tags
             );
+            const createDuration = performance.now() - createStartTime;
+            
+            console.log(`[Image Creation] Completed for ${img.id}`, {
+              duration: `${(createDuration / 1000).toFixed(2)}s`,
+              timestamp: new Date().toISOString(),
+              creationTime: `${(createDuration / 1000).toFixed(2)}s`
+            });
+            
+            // Clean up preload link
+            document.head.removeChild(preloadLink);
+            
+            if (createDuration > 1000) {
+              console.warn(`[Performance Warning] Image ${img.id} creation took ${(createDuration / 1000).toFixed(2)}s`);
+            }
+            
+            return imageData;
           })
         );
         
         // Update the sequence in ImageManager
+        const sequenceStartTime = performance.now();
         updateImageManagerSequence(newImages);
-        preloadedPages.current.add(pageNum);
+        const sequenceDuration = performance.now() - sequenceStartTime;
         
-        console.log(`Preloaded page ${pageNum} with ${newImages.length} images`);
+        console.log(`[Page ${pageNum}] Processing complete`, {
+          totalDuration: `${((performance.now() - pageStartTime) / 1000).toFixed(2)}s`,
+          imageCount: newImages.length,
+          sequenceUpdateTime: `${(sequenceDuration / 1000).toFixed(2)}s`,
+          timestamp: new Date().toISOString()
+        });
+        
+        preloadedPages.current.add(pageNum);
       }
     } catch (error) {
       console.error('Error preloading pages:', error);
     } finally {
       isPreloading.current = false;
+      console.log(`[Preload Summary] Total operation completed`, {
+        duration: `${((performance.now() - preloadStartTime) / 1000).toFixed(2)}s`,
+        timestamp: new Date().toISOString()
+      });
     }
   }, [hasMore, updateImageManagerSequence]);
 
+  // Optimize image loading by preloading next batch
+  useEffect(() => {
+    const preloadNextBatch = async () => {
+      if (images.length > 0) {
+        const nextBatch = images.slice(-10); // Preload last 10 images
+        nextBatch.forEach(image => {
+          const preloadLink = document.createElement('link');
+          preloadLink.rel = 'preload';
+          preloadLink.as = 'image';
+          preloadLink.href = image.getUrl();
+          document.head.appendChild(preloadLink);
+          // Clean up after a short delay
+          setTimeout(() => {
+            if (document.head.contains(preloadLink)) {
+              document.head.removeChild(preloadLink);
+            }
+          }, 5000);
+        });
+      }
+    };
+
+    preloadNextBatch();
+  }, [images]);
+
+  // Optimize image loading by using IntersectionObserver
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const img = entry.target as HTMLImageElement;
+            if (img.dataset.src) {
+              img.src = img.dataset.src;
+              img.removeAttribute('data-src');
+              observer.unobserve(img);
+            }
+          }
+        });
+      },
+      {
+        rootMargin: '200px 0px',
+        threshold: 0.1
+      }
+    );
+
+    // Observe all images
+    document.querySelectorAll('img[data-src]').forEach(img => observer.observe(img));
+
+    return () => observer.disconnect();
+  }, [images]);
+
   const loadImages = useCallback(async (pageNum: number) => {
+    const loadStartTime = performance.now();
     try {
       setIsLoading(true);
       setError(null);
       const currentFilter = imageManager.current.getCurrentFilter();
+      
+      const fetchStartTime = performance.now();
+      console.log(`[API Request] Starting fetch for page ${pageNum}`, {
+        timestamp: new Date().toISOString(),
+        filter: currentFilter
+      });
+      
       const response = await fetchImages({ 
         page: pageNum,
         ...currentFilter
       });
       
+      const fetchDuration = performance.now() - fetchStartTime;
+      console.log(`[API Request] Completed fetch for page ${pageNum}`, {
+        duration: `${(fetchDuration / 1000).toFixed(2)}s`,
+        timestamp: new Date().toISOString(),
+        imagesCount: response.images.length,
+        totalPages: response.total_pages,
+        currentPage: response.page
+      });
+
+      if (fetchDuration > 1000) {
+        console.warn(`[Performance Warning] API request for page ${pageNum} took ${(fetchDuration / 1000).toFixed(2)}s`);
+      }
+
       console.log('Loading images for page:', { pageNum, totalImages: response.images.length });
       
+      const processStartTime = performance.now();
       // Create ImageData objects and add them to ImageManager
       const newImages = await Promise.all(
         response.images.map(async (img: GalleryImageData) => {
           const imageUrl = img.url || imageManager.current.getImageUrl(img.id);
-          console.log('Loading image:', { id: img.id, url: imageUrl });
+          const imageStartTime = performance.now();
+          console.log(`[Image Processing] Starting processing for image ${img.id}`, {
+            timestamp: new Date().toISOString(),
+            url: imageUrl
+          });
+          
           const imageData = await imageManager.current.createImageFromUrl(
             imageUrl,
             img.id,
@@ -116,30 +241,47 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
             img.has_crop,
             img.has_tags
           );
+          
+          const imageDuration = performance.now() - imageStartTime;
+          console.log(`[Image Processing] Completed processing for image ${img.id}`, {
+            duration: `${(imageDuration / 1000).toFixed(2)}s`,
+            timestamp: new Date().toISOString()
+          });
+          
+          if (imageDuration > 500) {
+            console.warn(`[Performance Warning] Image ${img.id} processing took ${(imageDuration / 1000).toFixed(2)}s`);
+          }
+          
           return imageData;
         })
       );
 
-      console.log('New images loaded:', { 
-        count: newImages.length,
-        ids: newImages.map(img => img.getId())
+      const processDuration = performance.now() - processStartTime;
+      console.log(`[Batch Processing] Completed processing ${newImages.length} images`, {
+        duration: `${(processDuration / 1000).toFixed(2)}s`,
+        timestamp: new Date().toISOString(),
+        averageTimePerImage: `${(processDuration / newImages.length).toFixed(2)}ms`
       });
 
       // Update the sequence in ImageManager
+      const sequenceStartTime = performance.now();
       updateImageManagerSequence(newImages);
-      
-      console.log('Updated image sequence:', {
-        sequence: imageManager.current.getImageSequence(),
-        totalImages: imageManager.current.getTotalImages()
+      const sequenceDuration = performance.now() - sequenceStartTime;
+      console.log(`[Sequence Update] Completed sequence update`, {
+        duration: `${(sequenceDuration / 1000).toFixed(2)}s`,
+        timestamp: new Date().toISOString(),
+        imagesCount: newImages.length
       });
 
+      const stateUpdateStartTime = performance.now();
       setImages(prevImages => {
         const updatedImages = pageNum === 1 ? newImages : [...prevImages, ...newImages];
-        console.log('Updated images state:', {
-          totalImages: updatedImages.length,
-          ids: updatedImages.map(img => img.getId())
-        });
         return updatedImages;
+      });
+      const stateUpdateDuration = performance.now() - stateUpdateStartTime;
+      console.log(`[State Update] Completed state update`, {
+        duration: `${(stateUpdateDuration / 1000).toFixed(2)}s`,
+        timestamp: new Date().toISOString()
       });
       
       setHasMore(response.page < response.total_pages);
@@ -150,10 +292,24 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
         preloadNextPages(pageNum);
       }
     } catch (err) {
-      console.error('Error loading images:', err);
+      console.error('[Error] Failed to load images:', {
+        error: err,
+        timestamp: new Date().toISOString(),
+        page: pageNum
+      });
       setError(err instanceof Error ? err.message : 'Failed to load images');
     } finally {
       setIsLoading(false);
+      const totalDuration = performance.now() - loadStartTime;
+      console.log(`[Summary] Total page load operation completed`, {
+        duration: `${(totalDuration / 1000).toFixed(2)}s`,
+        timestamp: new Date().toISOString(),
+        page: pageNum
+      });
+      
+      if (totalDuration > 3000) {
+        console.warn(`[Performance Warning] Total page load took ${(totalDuration / 1000).toFixed(2)}s`);
+      }
     }
   }, [updateImageManagerSequence, preloadNextPages]);
 
@@ -345,13 +501,10 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
     return () => window.removeEventListener('filtersChanged', handleFilterChange);
   }, [loadImages]);
 
-  // Function to get a low-quality preview URL
-  const getPreviewUrl = useCallback((imageId: string) => {
-    return `${API_BASE_URL}/images/${imageId}/preview/50`; // 50px preview
-  }, []);
-
   // Function to handle image loading
   const handleImageLoad = useCallback((imageId: string) => {
+    const loadTime = performance.now() - (imageCache.current.get(imageId) || performance.now());
+    console.log(`Image ${imageId} loaded in ${loadTime.toFixed(2)}ms`);
     setLoadedImages(prev => new Set([...prev, imageId]));
   }, []);
 
@@ -408,25 +561,20 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
               onClick={() => handleImageClick(image)}
             >
               <div className="aspect-square relative overflow-hidden">
-                {/* Low quality preview */}
-                <img
-                  src={getPreviewUrl(imageId)}
-                  alt={metadata.filename}
-                  className={`w-full h-full object-cover blur-lg transition-opacity duration-300 ${
-                    isLoaded ? 'opacity-0' : 'opacity-100'
-                  }`}
-                  loading="lazy"
-                />
-                {/* High quality image */}
+                {/* Single image with loading state */}
                 <img
                   src={imageUrl}
                   alt={metadata.filename}
-                  className={`w-full h-full object-cover absolute top-0 left-0 transition-opacity duration-300 ${
+                  className={`w-full h-full object-cover transition-opacity duration-300 ${
                     isLoaded ? 'opacity-100' : 'opacity-0'
                   }`}
                   loading="lazy"
                   onLoad={() => handleImageLoad(imageId)}
                 />
+                {/* Loading placeholder */}
+                {!isLoaded && (
+                  <div className="absolute inset-0 bg-gray-200 animate-pulse" />
+                )}
                 {/* Status indicators */}
                 <div className="absolute top-2 left-2 flex gap-1">
                   {properties.has_caption && (
