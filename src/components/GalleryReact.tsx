@@ -17,7 +17,7 @@ declare global {
 }
 
 const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
-  const [images, setImages] = useState<ImageWrapper[]>([]);
+  const [imagesBucket, setImages] = useState<ImageWrapper[]>([]);
   const [selectedCount, setSelectedCount] = useState(0);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -139,8 +139,8 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
   // Optimize image loading by preloading next batch
   useEffect(() => {
     const preloadNextBatch = async () => {
-      if (images.length > 0) {
-        const nextBatch = images.slice(-10); // Preload last 10 images
+      if (imagesBucket.length > 0) {
+        const nextBatch = imagesBucket.slice(-10); // Preload last 10 images
         nextBatch.forEach(image => {
           const preloadLink = document.createElement('link');
           preloadLink.rel = 'preload';
@@ -158,7 +158,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
     };
 
     preloadNextBatch();
-  }, [images]);
+  }, [imagesBucket]);
 
   // Optimize image loading by using IntersectionObserver
   useEffect(() => {
@@ -185,7 +185,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
     document.querySelectorAll('img[data-src]').forEach(img => observer.observe(img));
 
     return () => observer.disconnect();
-  }, [images]);
+  }, [imagesBucket]);
 
   const loadImages = useCallback(async (pageNum: number) => {
     const loadStartTime = performance.now();
@@ -422,7 +422,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
       (entries) => {
         if (entries[0].isIntersecting && !isLoading && hasMore) {
           // Load more images when we're close to the end of the current page
-          const totalImagesShown = images.length;
+          const totalImagesShown = imagesBucket.length;
           // If we've shown more than 70% of the current page size (10), load more
           if (totalImagesShown > 7) {
             loadMoreImages();
@@ -445,7 +445,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
         observer.unobserve(loadingTrigger);
       }
     };
-  }, [loadMoreImages, isLoading, hasMore, images]);
+  }, [loadMoreImages, isLoading, hasMore, imagesBucket]);
 
   const handleExport = async () => {
     if (!imageManager.current || isExporting) return;
@@ -556,7 +556,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
       )}
 
       <div id="gallery-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">
-        {images.map((image, index) => {
+        {imagesBucket.map((image, index) => {
           const isSelected = image.isSelected();
           const imageUrl = image.getUrl();
           const metadata = image.getMetadata();
@@ -566,7 +566,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
           return (
             <div
               key={metadata.id}
-              ref={index === images.length - 1 ? lastImageRef : null}
+              ref={index === imagesBucket.length - 1 ? lastImageRef : null}
               className="relative group"
               onClick={() => handleImageClick(image)}
             >
