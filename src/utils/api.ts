@@ -155,6 +155,7 @@ interface FetchImagesBatchParams {
 
 interface WarmupCacheParams {
     startPage?: number;
+    page_size?: number;
     numPages?: number;
     actor?: string;
     tag?: string;
@@ -495,7 +496,7 @@ export async function getAvailableFilters(): Promise<Filters> {
     }
 }
 
-export async function warmupCache({ 
+export async function warmupCache2({ 
     startPage = 1, 
     numPages = 3,
     actor, 
@@ -536,3 +537,59 @@ export async function warmupCache({
         throw error;
     }
 } 
+
+export async function warmupCache({ 
+    startPage = 1,
+    page_size = 10,
+    actor, 
+    tag, 
+    year, 
+    has_caption, 
+    has_crop 
+}: WarmupCacheParams = {}): Promise<WarmupCacheResponse> {
+    const startTime = Date.now();
+    const caller = getCallerName();
+    const params = new URLSearchParams({
+        page: startPage.toString(),
+        page_size: page_size.toString(),
+    });
+
+    if (actor) params.append('actor', actor);
+    if (tag) params.append('tag', tag);
+    if (year) params.append('year', year);
+    if (has_caption !== undefined) params.append('has_caption', has_caption.toString());
+    if (has_crop !== undefined) params.append('has_crop', has_crop.toString());
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/cache/warmup?${params.toString()}`, 
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: ''
+            });
+
+        if (!response.ok) {
+            throw new Error('Failed to warmup cache images');
+        }
+        logApiCall(caller, '/cache/warmup', startTime, response.ok);
+        
+        const data = await response.json();
+
+        console.log('Cache warmup progress:', {
+            currentPage: data.page,
+            totalPages: data.total_pages,
+            timestamp: new Date().toLocaleTimeString()
+        });
+
+        return {
+            status: response.status,
+            hasMorePages: data.page < data.total_pages,
+        };
+    } catch (error) {
+        logApiCall(caller, '/cache/warmup', startTime, false, error);
+        console.error('Error warming up cache:', error);
+        throw error;
+    }
+}

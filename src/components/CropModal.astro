@@ -403,7 +403,7 @@ const { imageId } = Astro.props;
             // Update the image in the ImageManager
             const image = window.imageManager.getImage(currentImageId);
             if (image) {
-                image.updateProperties({ has_crop: true });
+                image.updateMetadata({ has_crop: true });
             }
 
             // Update the has_crop property on the image element

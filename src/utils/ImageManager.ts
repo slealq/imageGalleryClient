@@ -264,7 +264,7 @@ export class ImageManager {
     public setFilter(filter: FilterState): void {
         this.currentFilter = { ...filter };
         this.clearImageSequence();
-        this.startWarmup();
+        this.startWarmup(1);
     }
 
     public getCurrentFilter(): FilterState {
@@ -284,7 +284,7 @@ export class ImageManager {
         this.imageSequence = [];
     }
 
-    private async startWarmup(): Promise<void> {
+    public async startWarmup(pageNum: number): Promise<void> {
         if (this.warmupInProgress) {
             console.log('Cache warmup already in progress, skipping...');
             return;
@@ -292,28 +292,28 @@ export class ImageManager {
 
         console.log('Starting cache warmup with filters:', this.currentFilter);
         this.warmupInProgress = true;
-        let currentPage = 1;
-        const pageSize = 3; // Number of pages to warmup at once
+        let currentPage = pageNum;
+        const pageEnd = 2 + currentPage; // Number of pages to warmup at once
         let hasMorePages = true;
 
         try {
-            while (hasMorePages) {
-                console.log(`Warming up cache for pages ${currentPage} to ${currentPage + pageSize - 1}...`);
+            while (hasMorePages && currentPage < pageEnd)
+            {
+                console.log(`Warming up cache for page ${currentPage} of ${pageEnd}...`);
                 const response = await warmupCache({
                     startPage: currentPage,
-                    numPages: pageSize,
                     ...this.currentFilter
                 });
 
                 if (!response.hasMorePages) {
                     console.log('No more pages to warm up');
                     hasMorePages = false;
-                    break;
                 }
 
-                console.log(`Successfully warmed up pages ${currentPage} to ${currentPage + pageSize - 1}`);
-                currentPage += pageSize;
+                console.log(`Successfully warmed up pages ${currentPage} of ${pageEnd}`);
+                currentPage += 1;
             }
+
             console.log('Cache warmup completed successfully');
         } catch (error) {
             console.error('Error during cache warmup:', error);

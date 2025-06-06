@@ -40,6 +40,8 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
 
   // Function to preload next pages
   const preloadNextPages = useCallback(async (currentPage: number) => {
+    return;
+
     if (isPreloading.current || !hasMore) return;
     
     isPreloading.current = true;
@@ -67,7 +69,6 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
         const newImages = await Promise.all(
           response.images.map(async (img: GalleryImageData) => {
             const imageUrl = img.url || imageManager.current.getImageUrl(img.id);
-            const imageStartTime = performance.now();
             
             // Pre-fetch the image to improve perceived performance
             const preloadLink = document.createElement('link');
@@ -176,7 +177,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
         });
       },
       {
-        rootMargin: '200px 0px',
+        rootMargin: '1000px 0px',
         threshold: 0.1
       }
     );
@@ -208,6 +209,12 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
         page: pageNum,
         ...currentFilter
       });
+
+      console.log('WARMUP: Calling from load images')
+      // Fire and forget warmup for next page
+      imageManager.current.startWarmup(pageNum + 1).catch(error => {
+        console.error('Error during background warmup:', error);
+      });
       
       const fetchDuration = performance.now() - fetchStartTime;
       console.log('✅ API request completed', {
@@ -218,7 +225,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
       });
 
       if (fetchDuration > 1000) {
-        console.warn('⚠️ Slow API request detected', {
+        console.warn('⚠️ Slow IMAGE FETCH API request detected', {
           duration: `${(fetchDuration / 1000).toFixed(2)}s`,
           threshold: '1s'
         });
