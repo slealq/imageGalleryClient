@@ -189,15 +189,19 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
 
   const loadImages = useCallback(async (pageNum: number) => {
     const loadStartTime = performance.now();
+    console.group(`📊 Page Load Performance - Page ${pageNum}`);
+    console.time('Total Page Load');
+    
     try {
       setIsLoading(true);
       setError(null);
       const currentFilter = imageManager.current.getCurrentFilter();
       
       const fetchStartTime = performance.now();
-      console.log(`[API Request] Starting fetch for page ${pageNum}`, {
-        timestamp: new Date().toISOString(),
-        filter: currentFilter
+      console.log('🔄 Starting API request...', {
+        page: pageNum,
+        filter: currentFilter,
+        timestamp: new Date().toLocaleTimeString()
       });
       
       const response = await fetchImages({ 
@@ -206,19 +210,24 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
       });
       
       const fetchDuration = performance.now() - fetchStartTime;
-      console.log(`[API Request] Completed fetch for page ${pageNum}`, {
+      console.log('✅ API request completed', {
         duration: `${(fetchDuration / 1000).toFixed(2)}s`,
-        timestamp: new Date().toISOString(),
-        imagesCount: response.images.length,
+        imagesReceived: response.images.length,
         totalPages: response.total_pages,
-        currentPage: response.page
+        timestamp: new Date().toLocaleTimeString()
       });
 
       if (fetchDuration > 1000) {
-        console.warn(`[Performance Warning] API request for page ${pageNum} took ${(fetchDuration / 1000).toFixed(2)}s`);
+        console.warn('⚠️ Slow API request detected', {
+          duration: `${(fetchDuration / 1000).toFixed(2)}s`,
+          threshold: '1s'
+        });
       }
 
-      console.log('Loading images for page:', { pageNum, totalImages: response.images.length });
+      console.log('🖼️ Starting image processing...', {
+        totalImages: response.images.length,
+        timestamp: new Date().toLocaleTimeString()
+      });
       
       const processStartTime = performance.now();
       // Create ImageData objects and add them to ImageManager
@@ -226,10 +235,6 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
         response.images.map(async (img: GalleryImageData) => {
           const imageUrl = img.url || imageManager.current.getImageUrl(img.id);
           const imageStartTime = performance.now();
-          console.log(`[Image Processing] Starting processing for image ${img.id}`, {
-            timestamp: new Date().toISOString(),
-            url: imageUrl
-          });
           
           const imageData = await imageManager.current.createImageFromUrl(
             imageUrl,
@@ -243,13 +248,12 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
           );
           
           const imageDuration = performance.now() - imageStartTime;
-          console.log(`[Image Processing] Completed processing for image ${img.id}`, {
-            duration: `${(imageDuration / 1000).toFixed(2)}s`,
-            timestamp: new Date().toISOString()
-          });
-          
           if (imageDuration > 500) {
-            console.warn(`[Performance Warning] Image ${img.id} processing took ${(imageDuration / 1000).toFixed(2)}s`);
+            console.warn('⚠️ Slow image processing', {
+              imageId: img.id,
+              duration: `${(imageDuration / 1000).toFixed(2)}s`,
+              threshold: '500ms'
+            });
           }
           
           return imageData;
@@ -257,20 +261,21 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
       );
 
       const processDuration = performance.now() - processStartTime;
-      console.log(`[Batch Processing] Completed processing ${newImages.length} images`, {
+      console.log('✅ Image processing completed', {
         duration: `${(processDuration / 1000).toFixed(2)}s`,
-        timestamp: new Date().toISOString(),
-        averageTimePerImage: `${(processDuration / newImages.length).toFixed(2)}ms`
+        totalImages: newImages.length,
+        averageTimePerImage: `${(processDuration / newImages.length).toFixed(2)}ms`,
+        timestamp: new Date().toLocaleTimeString()
       });
 
       // Update the sequence in ImageManager
       const sequenceStartTime = performance.now();
       updateImageManagerSequence(newImages);
       const sequenceDuration = performance.now() - sequenceStartTime;
-      console.log(`[Sequence Update] Completed sequence update`, {
+      console.log('🔄 Sequence update completed', {
         duration: `${(sequenceDuration / 1000).toFixed(2)}s`,
-        timestamp: new Date().toISOString(),
-        imagesCount: newImages.length
+        imagesCount: newImages.length,
+        timestamp: new Date().toLocaleTimeString()
       });
 
       const stateUpdateStartTime = performance.now();
@@ -279,9 +284,9 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
         return updatedImages;
       });
       const stateUpdateDuration = performance.now() - stateUpdateStartTime;
-      console.log(`[State Update] Completed state update`, {
+      console.log('🔄 State update completed', {
         duration: `${(stateUpdateDuration / 1000).toFixed(2)}s`,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toLocaleTimeString()
       });
       
       setHasMore(response.page < response.total_pages);
@@ -292,24 +297,30 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
         preloadNextPages(pageNum);
       }
     } catch (err) {
-      console.error('[Error] Failed to load images:', {
+      console.error('❌ Error loading images:', {
         error: err,
-        timestamp: new Date().toISOString(),
-        page: pageNum
+        page: pageNum,
+        timestamp: new Date().toLocaleTimeString()
       });
       setError(err instanceof Error ? err.message : 'Failed to load images');
     } finally {
       setIsLoading(false);
       const totalDuration = performance.now() - loadStartTime;
-      console.log(`[Summary] Total page load operation completed`, {
-        duration: `${(totalDuration / 1000).toFixed(2)}s`,
-        timestamp: new Date().toISOString(),
-        page: pageNum
+      console.log('📊 Performance Summary', {
+        totalDuration: `${(totalDuration / 1000).toFixed(2)}s`,
+        page: pageNum,
+        timestamp: new Date().toLocaleTimeString()
       });
       
       if (totalDuration > 3000) {
-        console.warn(`[Performance Warning] Total page load took ${(totalDuration / 1000).toFixed(2)}s`);
+        console.warn('⚠️ Slow page load detected', {
+          duration: `${(totalDuration / 1000).toFixed(2)}s`,
+          threshold: '3s'
+        });
       }
+      
+      console.timeEnd('Total Page Load');
+      console.groupEnd();
     }
   }, [updateImageManagerSequence, preloadNextPages]);
 
