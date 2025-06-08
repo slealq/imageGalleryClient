@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'http://192.168.68.70:8001';
+export const API_BASE_URL = 'http://192.168.68.64:8001';
 
 // Add logging utility
 const logApiCall = (caller: string, endpoint: string, startTime: number, success: boolean, error?: any) => {
@@ -76,7 +76,7 @@ const getCallerName = () => {
     }
 };
 
-export interface ImageData {
+export interface ImageGData {
     id: string;
     filename: string;
     size: number;
@@ -91,8 +91,17 @@ export interface ImageData {
     url?: string;
 }
 
-export interface ImagesResponse {
-    images: ImageData[];
+interface ImagesMetadataRequest {
+    page?: number;
+    actor?: string;
+    tag?: string;
+    year?: string;
+    has_caption?: boolean;
+    has_crop?: boolean;
+}
+
+export interface ImagesMetadataResponse {
+    images: ImageGData[];
     total_pages: number;
     total: number;
     page: number;
@@ -134,15 +143,6 @@ export interface Filters {
     years: string[];
 }
 
-interface FetchImagesParams {
-    page?: number;
-    actor?: string;
-    tag?: string;
-    year?: string;
-    has_caption?: boolean;
-    has_crop?: boolean;
-}
-
 interface FetchImagesBatchParams {
     startPage?: number;
     numPages?: number;
@@ -169,14 +169,14 @@ interface WarmupCacheResponse {
     hasMorePages: boolean;
 }
 
-export async function fetchImages({ 
+export async function fetchImagesMetadata({ 
     page = 1, 
     actor, 
     tag, 
     year, 
     has_caption, 
     has_crop 
-}: FetchImagesParams = {}): Promise<ImagesResponse> {
+}: ImagesMetadataRequest = {}): Promise<ImagesMetadataResponse> {
     const startTime = Date.now();
     const caller = getCallerName();
     const params = new URLSearchParams({
@@ -196,7 +196,7 @@ export async function fetchImages({
         }
         const data = await response.json();
         // Ensure each image has a URL
-        data.images = data.images.map((img: ImageData) => ({
+        data.images = data.images.map((img: ImageGData) => ({
             ...img,
             url: getImageUrl(img.id)
         }));
@@ -217,7 +217,7 @@ export async function fetchImagesBatch({
     year, 
     has_caption, 
     has_crop 
-}: FetchImagesBatchParams = {}): Promise<ImagesResponse[]> {
+}: FetchImagesBatchParams = {}): Promise<ImagesMetadataResponse[]> {
     const params = new URLSearchParams({
         start_page: startPage.toString(),
         num_pages: numPages.toString(),
@@ -236,9 +236,9 @@ export async function fetchImagesBatch({
         }
         const data = await response.json();
         // Ensure each image has a URL
-        return data.map((page: ImagesResponse) => ({
+        return data.map((page: ImagesMetadataResponse) => ({
             ...page,
-            images: page.images.map((img: ImageData) => ({
+            images: page.images.map((img: ImageGData) => ({
                 ...img,
                 url: getImageUrl(img.id)
             }))

@@ -1,4 +1,4 @@
-import { getImageCaption, saveImageCaption, getCroppedImage, getImageUrl, getCrop, API_BASE_URL, exportImages, warmupCache } from './api';
+import { getImageCaption, saveImageCaption, getCroppedImage, getImageUrl, getCrop, API_BASE_URL, exportImages, warmupCache, fetchImagesMetadata, type ImagesMetadataResponse, type ImageGData } from './api';
 
 export interface ImageMetadata {
     id: string;
@@ -131,6 +131,55 @@ export class ImageManager {
 
     getImageUrl(imageId: string): string {
         return `${this.baseUrl}/images/${imageId}`;
+    }
+
+    public async fetchImagesMetadata(pageNum: number) : Promise<ImagesMetadataResponse> {
+        const response = await fetchImagesMetadata({ 
+            page: pageNum,
+            ...this.getCurrentFilter()
+          });
+
+        // Fire and forget warmup for next page
+        console.log('WARMUP: Calling from load images')
+        this.startWarmup(pageNum + 1).catch(error => {
+            console.error('Error during background warmup:', error);
+        });
+
+        return response;
+    }
+
+    public async updateImages(imagesMetadata: ImageGData[]) {
+        // Create ImageData objects and add them to ImageManager
+        const images = await Promise.all(
+            imagesMetadata.map(async (img: ImageGData) => {
+            const imageUrl = img.url || this.getImageUrl(img.id);
+            const imageStartTime = performance.now();
+            
+            const imageData = await this.createImageFromUrl(
+                imageUrl,
+                img.id,
+                img.filename,
+                img.size,
+                img.created_at,
+                img.has_caption,
+                img.has_crop,
+                img.has_tags
+            );
+            
+            const imageDuration = performance.now() - imageStartTime;
+            if (imageDuration > 500) {
+                console.warn('⚠️ Slow image processing', {
+                imageId: img.id,
+                duration: `${(imageDuration / 1000).toFixed(2)}s`,
+                threshold: '500ms'
+                });
+            }
+            
+            return imageData;
+            })
+        );
+
+        return images;
     }
 
     async addImage(metadata: ImageMetadata): Promise<ImageWrapper> {

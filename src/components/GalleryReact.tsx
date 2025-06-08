@@ -1,12 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { fetchImages } from '../utils/api';
 import { ImageManager, ImageWrapper } from '../utils/ImageManager';
-import type { ImageData as GalleryImageData } from '../types/gallery';
-import { fetchImagesBatch } from '../utils/api';
 
 interface GalleryReactProps {
-  initialImages: GalleryImageData[];
-  initialTotalPages: number;
 }
 
 // Expose loadMoreImages through window
@@ -16,7 +11,7 @@ declare global {
     }
 }
 
-const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
+const GalleryReact: React.FC<GalleryReactProps> = () => {
   const [imagesBucket, setImages] = useState<ImageWrapper[]>([]);
   const [selectedCount, setSelectedCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -29,7 +24,6 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
   const imageManager = useRef<ImageManager>(ImageManager.getInstance());
   const lastImageRef = useRef<HTMLDivElement | null>(null);
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
-  const imageCache = useRef<Map<string, number>>(new Map());
 
   // Function to update image order in ImageManager
   const updateImageManagerSequence = useCallback((newImages: ImageWrapper[]) => {
@@ -53,18 +47,9 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
         filter: currentFilter,
         timestamp: new Date().toLocaleTimeString()
       });
+
+      const response = await imageManager.current.fetchImagesMetadata(pageNum);
       
-      const response = await fetchImages({ 
-        page: pageNum,
-        ...currentFilter
-      });
-
-      console.log('WARMUP: Calling from load images')
-      // Fire and forget warmup for next page
-      imageManager.current.startWarmup(pageNum + 1).catch(error => {
-        console.error('Error during background warmup:', error);
-      });
-
       setPage(pageNum);
       setTotalPages(totalPages);
       
@@ -89,35 +74,8 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
       });
       
       const processStartTime = performance.now();
-      // Create ImageData objects and add them to ImageManager
-      const newImages = await Promise.all(
-        response.images.map(async (img: GalleryImageData) => {
-          const imageUrl = img.url || imageManager.current.getImageUrl(img.id);
-          const imageStartTime = performance.now();
-          
-          const imageData = await imageManager.current.createImageFromUrl(
-            imageUrl,
-            img.id,
-            img.filename,
-            img.size,
-            img.created_at,
-            img.has_caption,
-            img.has_crop,
-            img.has_tags
-          );
-          
-          const imageDuration = performance.now() - imageStartTime;
-          if (imageDuration > 500) {
-            console.warn('⚠️ Slow image processing', {
-              imageId: img.id,
-              duration: `${(imageDuration / 1000).toFixed(2)}s`,
-              threshold: '500ms'
-            });
-          }
-          
-          return imageData;
-        })
-      );
+
+      const newImages = await imageManager.current.updateImages(response.images);
 
       const processDuration = performance.now() - processStartTime;
       console.log('✅ Image processing completed', {
@@ -177,36 +135,6 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
       console.groupEnd();
     }
   }, [updateImageManagerSequence]);
-
-  // Initialize images in ImageManager
-  useEffect(() => {
-    if (!imageManager.current) return;
-
-    const initializeImages = async () => {
-      const newImages: ImageWrapper[] = [];
-      for (const image of initialImages) {
-        try {
-          const imageData = await imageManager.current.createImageFromUrl(
-            imageManager.current.getImageUrl(image.id),
-            image.id,
-            image.filename,
-            image.size,
-            image.created_at,
-            image.has_caption,
-            image.has_crop,
-            image.has_tags
-          );
-          newImages.push(imageData);
-        } catch (error) {
-          console.error(`Error loading image ${image.id}:`, error);
-        }
-      }
-      setImages(newImages);
-      updateImageManagerSequence(newImages);
-    };
-
-    initializeImages();
-  }, [initialImages, updateImageManagerSequence]);
 
   const loadMoreImages = useCallback(async (): Promise<boolean> => {
     if (isLoading || !hasMore) return false;
@@ -272,16 +200,11 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && !isLoading && hasMore || page < totalPages + 5) {
-          // Load more images when we're close to the end of the current page
-          const totalImagesShown = imagesBucket.length;
-          // If we've shown more than 70% of the current page size (10), load more
-          if (totalImagesShown > 7) {
-            loadMoreImages();
-          }
+          loadMoreImages();
         }
       },
       {
-        rootMargin: '2000px',
+        rootMargin: '10000px',
         threshold: 0.1
       }
     );
@@ -365,9 +288,12 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
 
   // Function to handle image loading
   const handleImageLoad = useCallback((imageId: string) => {
-    const loadTime = performance.now() - (imageCache.current.get(imageId) || performance.now());
-    console.log(`Image ${imageId} loaded in ${loadTime.toFixed(2)}ms`);
     setLoadedImages(prev => new Set([...prev, imageId]));
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    loadImages(1);
   }, []);
 
   return (
