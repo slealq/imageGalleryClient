@@ -21,6 +21,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
   const [selectedCount, setSelectedCount] = useState(0);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -29,164 +30,12 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
   const lastImageRef = useRef<HTMLDivElement | null>(null);
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
   const imageCache = useRef<Map<string, number>>(new Map());
-  const preloadedPages = useRef<Set<number>>(new Set());
-  const isPreloading = useRef<boolean>(false);
 
   // Function to update image order in ImageManager
   const updateImageManagerSequence = useCallback((newImages: ImageWrapper[]) => {
     const imageIds = newImages.map(img => img.getId());
     imageManager.current.setImageSequence(imageIds);
   }, []);
-
-  // Function to preload next pages
-  const preloadNextPages = useCallback(async (currentPage: number) => {
-    return;
-
-    if (isPreloading.current || !hasMore) return;
-    
-    isPreloading.current = true;
-    const preloadStartTime = performance.now();
-    try {
-      const currentFilter = imageManager.current.getCurrentFilter();
-      
-      console.log(`Preloading pages starting from ${currentPage + 1}`);
-      const fetchStartTime = performance.now();
-      const responses = await fetchImagesBatch({ 
-        startPage: currentPage + 1,
-        numPages: 3,
-        ...currentFilter
-      });
-      console.log(`Fetch batch took ${(performance.now() - fetchStartTime).toFixed(2)}ms`);
-      
-      for (const response of responses) {
-        if (!response.images.length) continue;
-        
-        const pageNum = response.page;
-        if (preloadedPages.current.has(pageNum)) continue;
-        
-        const pageStartTime = performance.now();
-        // Create ImageData objects and add them to ImageManager
-        const newImages = await Promise.all(
-          response.images.map(async (img: GalleryImageData) => {
-            const imageUrl = img.url || imageManager.current.getImageUrl(img.id);
-            
-            // Pre-fetch the image to improve perceived performance
-            const preloadLink = document.createElement('link');
-            preloadLink.rel = 'preload';
-            preloadLink.as = 'image';
-            preloadLink.href = imageUrl;
-            document.head.appendChild(preloadLink);
-            
-            console.log(`[Image Creation] Starting for ${img.id}`, {
-              timestamp: new Date().toISOString(),
-              url: imageUrl
-            });
-            
-            const createStartTime = performance.now();
-            const imageData = await imageManager.current.createImageFromUrl(
-              imageUrl,
-              img.id,
-              img.filename,
-              img.size,
-              img.created_at,
-              img.has_caption,
-              img.has_crop,
-              img.has_tags
-            );
-            const createDuration = performance.now() - createStartTime;
-            
-            console.log(`[Image Creation] Completed for ${img.id}`, {
-              duration: `${(createDuration / 1000).toFixed(2)}s`,
-              timestamp: new Date().toISOString(),
-              creationTime: `${(createDuration / 1000).toFixed(2)}s`
-            });
-            
-            // Clean up preload link
-            document.head.removeChild(preloadLink);
-            
-            if (createDuration > 1000) {
-              console.warn(`[Performance Warning] Image ${img.id} creation took ${(createDuration / 1000).toFixed(2)}s`);
-            }
-            
-            return imageData;
-          })
-        );
-        
-        // Update the sequence in ImageManager
-        const sequenceStartTime = performance.now();
-        updateImageManagerSequence(newImages);
-        const sequenceDuration = performance.now() - sequenceStartTime;
-        
-        console.log(`[Page ${pageNum}] Processing complete`, {
-          totalDuration: `${((performance.now() - pageStartTime) / 1000).toFixed(2)}s`,
-          imageCount: newImages.length,
-          sequenceUpdateTime: `${(sequenceDuration / 1000).toFixed(2)}s`,
-          timestamp: new Date().toISOString()
-        });
-        
-        preloadedPages.current.add(pageNum);
-      }
-    } catch (error) {
-      console.error('Error preloading pages:', error);
-    } finally {
-      isPreloading.current = false;
-      console.log(`[Preload Summary] Total operation completed`, {
-        duration: `${((performance.now() - preloadStartTime) / 1000).toFixed(2)}s`,
-        timestamp: new Date().toISOString()
-      });
-    }
-  }, [hasMore, updateImageManagerSequence]);
-
-  // Optimize image loading by preloading next batch
-  useEffect(() => {
-    const preloadNextBatch = async () => {
-      if (imagesBucket.length > 0) {
-        const nextBatch = imagesBucket.slice(-10); // Preload last 10 images
-        nextBatch.forEach(image => {
-          const preloadLink = document.createElement('link');
-          preloadLink.rel = 'preload';
-          preloadLink.as = 'image';
-          preloadLink.href = image.getUrl();
-          document.head.appendChild(preloadLink);
-          // Clean up after a short delay
-          setTimeout(() => {
-            if (document.head.contains(preloadLink)) {
-              document.head.removeChild(preloadLink);
-            }
-          }, 5000);
-        });
-      }
-    };
-
-    preloadNextBatch();
-  }, [imagesBucket]);
-
-  // Optimize image loading by using IntersectionObserver
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            const img = entry.target as HTMLImageElement;
-            if (img.dataset.src) {
-              img.src = img.dataset.src;
-              img.removeAttribute('data-src');
-              observer.unobserve(img);
-            }
-          }
-        });
-      },
-      {
-        rootMargin: '1000px 0px',
-        threshold: 0.1
-      }
-    );
-
-    // Observe all images
-    document.querySelectorAll('img[data-src]').forEach(img => observer.observe(img));
-
-    return () => observer.disconnect();
-  }, [imagesBucket]);
 
   const loadImages = useCallback(async (pageNum: number) => {
     const loadStartTime = performance.now();
@@ -215,6 +64,9 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
       imageManager.current.startWarmup(pageNum + 1).catch(error => {
         console.error('Error during background warmup:', error);
       });
+
+      setPage(pageNum);
+      setTotalPages(totalPages);
       
       const fetchDuration = performance.now() - fetchStartTime;
       console.log('✅ API request completed', {
@@ -298,11 +150,6 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
       
       setHasMore(response.page < response.total_pages);
       setPage(pageNum);
-
-      // Start preloading next pages
-      if (response.page < response.total_pages) {
-        preloadNextPages(pageNum);
-      }
     } catch (err) {
       console.error('❌ Error loading images:', {
         error: err,
@@ -329,7 +176,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
       console.timeEnd('Total Page Load');
       console.groupEnd();
     }
-  }, [updateImageManagerSequence, preloadNextPages]);
+  }, [updateImageManagerSequence]);
 
   // Initialize images in ImageManager
   useEffect(() => {
@@ -356,13 +203,10 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
       }
       setImages(newImages);
       updateImageManagerSequence(newImages);
-      
-      // Start preloading next pages after initialization
-      preloadNextPages(1);
     };
 
     initializeImages();
-  }, [initialImages, updateImageManagerSequence, preloadNextPages]);
+  }, [initialImages, updateImageManagerSequence]);
 
   const loadMoreImages = useCallback(async (): Promise<boolean> => {
     if (isLoading || !hasMore) return false;
@@ -427,7 +271,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !isLoading && hasMore) {
+        if (entries[0].isIntersecting && !isLoading && hasMore || page < totalPages + 5) {
           // Load more images when we're close to the end of the current page
           const totalImagesShown = imagesBucket.length;
           // If we've shown more than 70% of the current page size (10), load more
@@ -452,7 +296,7 @@ const GalleryReact: React.FC<GalleryReactProps> = ({ initialImages }) => {
         observer.unobserve(loadingTrigger);
       }
     };
-  }, [loadMoreImages, isLoading, hasMore, imagesBucket]);
+  }, [loadMoreImages, isLoading, hasMore, imagesBucket, page]);
 
   const handleExport = async () => {
     if (!imageManager.current || isExporting) return;
