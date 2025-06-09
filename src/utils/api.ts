@@ -253,6 +253,28 @@ export function getImageUrl(imageId: string): string {
     return `${API_BASE_URL}/images/${imageId}`;
 }
 
+export async function fetchImageBlob(imageId: string): Promise<Blob> {
+    const startTime = Date.now();
+    const caller = getCallerName();
+    try {
+        const response = await fetch(getImageUrl(imageId), {
+            headers: {
+                'Accept': '*/*',
+                'Origin': "http://192.168.68.64:8001"
+            }        
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const blob = await response.blob();
+        logApiCall(caller, `/images/${imageId}`, startTime, true);
+        return blob;
+    } catch (error) {
+        logApiCall(caller, `/images/${imageId}`, startTime, false, error);
+        throw error;
+    }
+}
+
 export async function getImageCaption(imageId: string): Promise<string> {
     const startTime = Date.now();
     const caller = getCallerName();

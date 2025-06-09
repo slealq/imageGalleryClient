@@ -28,7 +28,7 @@ const GalleryReact: React.FC<GalleryReactProps> = () => {
   // Function to update image order in ImageManager
   const updateImageManagerSequence = useCallback((newImages: ImageWrapper[]) => {
     const imageIds = newImages.map(img => img.getId());
-    imageManager.current.setImageSequence(imageIds);
+    // imageManager.current.setImageSequence(imageIds);
   }, []);
 
   const loadImages = useCallback(async (pageNum: number) => {
@@ -299,13 +299,6 @@ const GalleryReact: React.FC<GalleryReactProps> = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-4">
-        <button
-          type="button"
-          className="rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-          onClick={() => typeof window !== 'undefined' && window.openDrawer?.()}
-        >
-          Open Drawer
-        </button>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <span className="text-lg font-medium text-gray-700">Selected:</span>

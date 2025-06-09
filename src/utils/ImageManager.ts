@@ -1,4 +1,4 @@
-import { getImageCaption, saveImageCaption, getCroppedImage, getImageUrl, getCrop, API_BASE_URL, exportImages, warmupCache, fetchImagesMetadata, type ImagesMetadataResponse, type ImageGData } from './api';
+import { getImageCaption, saveImageCaption, getCroppedImage, fetchImageBlob, getCrop, API_BASE_URL, exportImages, warmupCache, fetchImagesMetadata, type ImagesMetadataResponse, type ImageGData } from './api';
 
 export interface ImageMetadata {
     id: string;
@@ -36,6 +36,8 @@ export class ImageWrapper {
         if (this.metadata.has_caption) {
             await this.fetchCaption();
         }
+
+        // this.image = await fetchImageBlob(this.metadata.id);
     }
 
     private async fetchCaption() {
@@ -109,6 +111,10 @@ export class ImageWrapper {
 
     isSelected(): boolean {
         return this.metadata.is_selected || false;
+    }
+
+    getImageBlob(): Blob | null {
+        return this.image;
     }
 }
 
@@ -255,6 +261,7 @@ export class ImageManager {
 
     getPreviousImage(currentId: string): ImageWrapper | undefined {
         const currentIndex = this.getImageIndex(currentId);
+
         if (currentIndex <= 0) {
             return undefined;
         }
@@ -262,6 +269,8 @@ export class ImageManager {
     }
 
     getImageIndex(id: string): number {
+        console.log(`Image sequence has ${this.imageSequence.length} values`);
+
         return this.imageSequence.indexOf(id);
     }
 

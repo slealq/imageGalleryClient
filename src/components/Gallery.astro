@@ -1,34 +1,23 @@
 ---
 import GalleryReact from './GalleryReact';
 import FullscreenModal from './FullscreenModal.astro';
-import Drawer from './Drawer.astro';
 import "../styles/global.css";
 ---
 
-<div class="container mx-auto px-1 space-y-2">
+<div class="container mx-auto px-1 space-y-2 relative">
+  <button
+    id="open-drawer-button"
+    class="fixed top-4 left-4 z-50 bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-lg shadow-lg backdrop-blur-sm transition-all duration-200 flex items-center gap-2 border border-gray-200 hover:shadow-xl"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+    </svg>
+    Settings
+  </button>
   <GalleryReact client:load/>
 </div>
 
 <FullscreenModal />
-
-<Drawer title="Gallery Settings" isOpen={false}>
-  <div class="space-y-4">
-    <div>
-      <h3 class="text-lg font-medium text-gray-900">Display Settings</h3>
-      <p class="text-sm text-gray-500">Customize how your gallery is displayed.</p>
-    </div>
-    <div class="space-y-2">
-      <label class="flex items-center">
-        <input type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
-        <span class="ml-2 text-sm text-gray-600">Show image details</span>
-      </label>
-      <label class="flex items-center">
-        <input type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
-        <span class="ml-2 text-sm text-gray-600">Enable hover effects</span>
-      </label>
-    </div>
-  </div>
-</Drawer>
 
 <script>
   // Add click handlers to all image containers
@@ -56,5 +45,16 @@ import "../styles/global.css";
         }
       });
     });
+
+    // Add click handler for the open drawer button
+    const openDrawerButton = document.getElementById('open-drawer-button');
+    if (openDrawerButton) {
+      openDrawerButton.addEventListener('click', () => {
+        const openDrawerFunction = (window as any).openDrawer;
+        if (openDrawerFunction) {
+          openDrawerFunction();
+        }
+      });
+    }
   });
 </script>
