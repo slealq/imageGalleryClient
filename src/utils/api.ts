@@ -615,3 +615,28 @@ export async function warmupCache({
         throw error;
     }
 }
+
+export async function getImageTags(imageId: string): Promise<string[]> {
+    const response = await fetch(`${API_BASE_URL}/images/${imageId}/tags`);
+    if (!response.ok) {
+        throw new Error('Failed to fetch image tags');
+    }
+    const data = await response.json();
+    // Handle both direct array and object with tags property
+    const tags: unknown[] = Array.isArray(data) ? data : (data.tags || []);
+    // Ensure all items are strings and remove duplicates while preserving order
+    return [...new Set(tags.map((tag: unknown) => String(tag)))];
+}
+
+export async function addImageTag(imageId: string, tag: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/images/${imageId}/tags`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ tag }),
+    });
+    if (!response.ok) {
+        throw new Error('Failed to add tag');
+    }
+}

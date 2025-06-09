@@ -1,0 +1,156 @@
+---
+interface Props {
+    imageId: string;
+}
+
+const { imageId } = Astro.props;
+---
+
+<div id="tags-modal" class="fixed inset-0 bg-black/90 hidden z-50 flex items-center justify-center">
+    <div class="bg-white rounded-lg p-6 w-full max-w-md">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold">Manage Tags</h2>
+            <button id="close-tags-modal" class="text-gray-500 hover:text-gray-700">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="mb-4">
+            <div class="flex gap-2 mb-4">
+                <input 
+                    type="text" 
+                    id="new-tag-input" 
+                    placeholder="Enter new tag" 
+                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button 
+                    id="add-tag-button" 
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                    Add
+                </button>
+            </div>
+
+            <div id="tags-container" class="flex flex-wrap gap-2">
+                <!-- Tags will be dynamically added here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    import { getImageTags, addImageTag } from '../utils/api';
+
+    class TagsModal {
+        private modal: HTMLElement | null = null;
+        private closeButton: HTMLElement | null = null;
+        private addButton: HTMLElement | null = null;
+        private input: HTMLInputElement | null = null;
+        private tagsContainer: HTMLElement | null = null;
+        private currentImageId: string | null = null;
+
+        constructor() {
+            this.initializeElements();
+            this.setupEventListeners();
+            this.exposeOpenModal();
+        }
+
+        private initializeElements(): void {
+            this.modal = document.getElementById('tags-modal');
+            this.closeButton = document.getElementById('close-tags-modal');
+            this.addButton = document.getElementById('add-tag-button');
+            this.input = document.getElementById('new-tag-input') as HTMLInputElement;
+            this.tagsContainer = document.getElementById('tags-container');
+        }
+
+        private setupEventListeners(): void {
+            this.closeButton?.addEventListener('click', () => this.closeModal());
+            this.addButton?.addEventListener('click', () => this.handleAddTag());
+            this.input?.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.handleAddTag();
+                }
+            });
+
+            // Close modal when clicking outside
+            this.modal?.addEventListener('click', (e) => {
+                if (e.target === this.modal) {
+                    this.closeModal();
+                }
+            });
+        }
+
+        private async handleAddTag(): Promise<void> {
+            if (!this.currentImageId || !this.input || !this.tagsContainer) return;
+
+            const tag = this.input.value.trim();
+            if (!tag) return;
+
+            try {
+                await addImageTag(this.currentImageId, tag);
+                this.input.value = '';
+                await this.loadTags();
+            } catch (error) {
+                console.error('Failed to add tag:', error);
+                alert('Failed to add tag. Please try again.');
+            }
+        }
+
+        private async loadTags(): Promise<void> {
+            if (!this.currentImageId || !this.tagsContainer) return;
+
+            try {
+                const tags = await getImageTags(this.currentImageId);
+                this.renderTags(tags);
+            } catch (error) {
+                console.error('Failed to load tags:', error);
+                this.tagsContainer.innerHTML = '<p class="text-red-500">Failed to load tags</p>';
+            }
+        }
+
+        private renderTags(tags: string[]): void {
+            if (!this.tagsContainer) return;
+
+            if (tags.length === 0) {
+                this.tagsContainer.innerHTML = '<p class="text-gray-500">No tags yet</p>';
+                return;
+            }
+
+            this.tagsContainer.innerHTML = tags.map(tag => `
+                <span class="px-3 py-1 bg-gray-100 rounded-full text-sm">
+                    ${tag}
+                </span>
+            `).join('');
+        }
+
+        private closeModal(): void {
+            if (this.modal) {
+                this.modal.classList.add('hidden');
+                document.body.style.overflow = '';
+            }
+        }
+
+        public async openModal(imageId: string): Promise<void> {
+            this.currentImageId = imageId;
+            
+            if (this.modal) {
+                this.modal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+                await this.loadTags();
+            }
+        }
+
+        private exposeOpenModal(): void {
+            if (typeof window !== 'undefined') {
+                (window as any).openTagsModal = this.openModal.bind(this);
+            }
+        }
+    }
+
+    // Initialize the handler when the DOM is loaded
+    document.addEventListener('DOMContentLoaded', () => {
+        new TagsModal();
+    });
+</script> 

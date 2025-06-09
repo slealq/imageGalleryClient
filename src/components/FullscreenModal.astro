@@ -1,6 +1,7 @@
 ---
 import CaptionModal from './CaptionModal.astro';
 import CropModal from './CropModal.astro';
+import TagsModal from './TagsModal.astro';
 
 interface Props {
     imageUrl?: string;
@@ -68,6 +69,14 @@ declare global {
                     <button id="modal-crop-button" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm font-medium transition-colors cursor-pointer">
                         Crop Image
                     </button>
+
+                    <div id="tags-status" class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full"></span>
+                        <span class="text-sm">Tags Status</span>
+                    </div>
+                    <button id="modal-tags-button" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium transition-colors cursor-pointer">
+                        Manage Tags
+                    </button>
                 </div>
             </div>
         </div>
@@ -76,6 +85,7 @@ declare global {
 
 <CaptionModal imageId="" />
 <CropModal imageId="" />
+<TagsModal imageId="" />
 
 <script>
     import { ImageManager, ImageWrapper } from '../utils/ImageManager';
@@ -89,6 +99,7 @@ declare global {
         private modalCollection: HTMLElement | null = null;
         private captionButton: HTMLElement | null = null;
         private cropButton: HTMLElement | null = null;
+        private tagsButton: HTMLElement | null = null;
         private selectionButton: HTMLElement | null = null;
         private imageElements: HTMLImageElement[] = [];
         private currentImageIndex: number = -1;
@@ -97,6 +108,7 @@ declare global {
         private imageManager: ImageManager;
         private isCaptionModalOpen: boolean = false;
         private isCropModalOpen: boolean = false;
+        private isTagsModalOpen: boolean = false;
 
         constructor() {
             this.imageManager = window.imageManager;
@@ -115,6 +127,7 @@ declare global {
             this.modalCollection = document.getElementById('modal-collection');
             this.captionButton = document.getElementById('modal-caption-button');
             this.cropButton = document.getElementById('modal-crop-button');
+            this.tagsButton = document.getElementById('modal-tags-button');
             this.selectionButton = document.getElementById('modal-selection-button');
             this.imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
         }
@@ -145,11 +158,24 @@ declare global {
                 });
                 observer.observe(cropModal, { attributes: true });
             }
+
+            // Observe tags modal
+            const tagsModal = document.getElementById('tags-modal');
+            if (tagsModal) {
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.attributeName === 'class') {
+                            this.isTagsModalOpen = !tagsModal.classList.contains('hidden');
+                        }
+                    });
+                });
+                observer.observe(tagsModal, { attributes: true });
+            }
         }
 
         private handleKeyDown(e: KeyboardEvent): void {
             // If any modal is open, only handle Escape key and arrow keys
-            if (this.isCaptionModalOpen || this.isCropModalOpen) {
+            if (this.isCaptionModalOpen || this.isCropModalOpen || this.isTagsModalOpen) {
                 if (e.key === 'Escape') {
                     this.closeModal();
                 } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -186,6 +212,11 @@ declare global {
                         (window as any).openCropModal(this.currentImageId);
                     }
                     break;
+                case 't':
+                    if (this.currentImageId) {
+                        (window as any).openTagsModal(this.currentImageId);
+                    }
+                    break;
             }
         }
 
@@ -211,6 +242,12 @@ declare global {
             this.captionButton?.addEventListener('click', () => {
                 if (this.currentImageId) {
                     (window as any).openCaptionModal(this.currentImageId);
+                }
+            });
+
+            this.tagsButton?.addEventListener('click', () => {
+                if (this.currentImageId) {
+                    (window as any).openTagsModal(this.currentImageId);
                 }
             });
 
@@ -271,6 +308,15 @@ declare global {
                 const hasCrop = image.getMetadata()?.has_crop || false;
                 cropStatusDot.className = `w-2 h-2 rounded-full ${hasCrop ? 'bg-green-500' : 'bg-red-500'}`;
                 cropStatusText.textContent = hasCrop ? 'Has Crop' : 'No Crop';
+            }
+
+            // Update tags status
+            const tagsStatusDot = document.querySelector('#tags-status .w-2');
+            const tagsStatusText = document.querySelector('#tags-status span:last-child');
+            if (tagsStatusDot && tagsStatusText) {
+                const hasTags = image.getMetadata()?.has_tags || false;
+                tagsStatusDot.className = `w-2 h-2 rounded-full ${hasTags ? 'bg-green-500' : 'bg-red-500'}`;
+                tagsStatusText.textContent = hasTags ? 'Has Tags' : 'No Tags';
             }
         }
 
@@ -398,7 +444,7 @@ declare global {
             
             if (this.modal && this.modalImage && this.modalFilename && this.modalSize && 
                 this.modalCreated && this.modalCollection && this.captionButton && 
-                this.cropButton && this.selectionButton) {
+                this.cropButton && this.tagsButton && this.selectionButton) {
                 
                 this.modalImage.setAttribute('src', imageUrl);
                 this.modalImage.setAttribute('data-filename', filename);
@@ -417,6 +463,7 @@ declare global {
                 // Ensure buttons are always visible
                 this.captionButton.classList.remove('hidden');
                 this.cropButton.classList.remove('hidden');
+                this.tagsButton.classList.remove('hidden');
 
                 // Update selection button state
                 const image = this.imageManager.getImage(imageId);
