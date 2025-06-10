@@ -252,6 +252,13 @@ declare global {
             });
 
             this.selectionButton?.addEventListener('click', this.handleSelectionClick.bind(this));
+
+            // Listen for tag updates
+            window.addEventListener('imageTagsUpdated', ((e: CustomEvent) => {
+                if (this.currentImageId && this.currentImageId === e.detail.imageId) {
+                    this.updateStatuses(this.currentImageId);
+                }
+            }) as EventListener);
         }
 
         private handleSelectionClick(e: Event): void {

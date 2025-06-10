@@ -159,6 +159,17 @@ const { imageId } = Astro.props;
                     window.imageManager.refreshAvailableTags()
                 ]);
                 await this.loadAvailableTags();
+
+                // Update the image metadata to reflect the new custom tag
+                const image = window.imageManager.getImage(this.currentImageId);
+                if (image) {
+                    image.updateMetadata({ has_custom_tags: true });
+                }
+
+                // Dispatch an event to update UI components
+                window.dispatchEvent(new CustomEvent('imageTagsUpdated', {
+                    detail: { imageId: this.currentImageId }
+                }));
             } catch (error) {
                 console.error('Failed to add tag:', error);
                 alert('Failed to add tag. Please try again.');
