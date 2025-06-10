@@ -363,6 +363,9 @@ const GalleryReact: React.FC<GalleryReactProps> = () => {
                   {metadata.has_crop && (
                     <div className="w-2 h-2 rounded-full bg-purple-500 border border-white shadow-sm"></div>
                   )}
+                  {metadata.has_custom_tags && (
+                    <div className="w-2 h-2 rounded-full bg-green-500 border border-white shadow-sm"></div>
+                  )}
                 </div>
                 <button
                   onClick={(e) => handleSelectionClick(e, metadata.id)}

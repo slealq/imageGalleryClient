@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'http://192.168.68.64:8001';
+export const API_BASE_URL = 'http://192.168.68.56:8001';
 
 // Add logging utility
 const logApiCall = (caller: string, endpoint: string, startTime: number, success: boolean, error?: any) => {
@@ -87,6 +87,7 @@ export interface ImageGData {
     collection_name: string;
     has_tags: boolean;
     has_crop: boolean;
+    has_custom_tags: boolean;
     mime_type: string;
     url?: string;
 }
@@ -617,26 +618,66 @@ export async function warmupCache({
 }
 
 export async function getImageTags(imageId: string): Promise<string[]> {
-    const response = await fetch(`${API_BASE_URL}/images/${imageId}/tags`);
-    if (!response.ok) {
-        throw new Error('Failed to fetch image tags');
+    const startTime = Date.now();
+    const caller = getCallerName();
+    try {
+        const response = await fetch(`${API_BASE_URL}/images/${imageId}/tags`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch image tags');
+        }
+        const data = await response.json();
+        // Handle both direct array and object with tags property
+        const tags: unknown[] = Array.isArray(data) ? data : (data.tags || []);
+        // Ensure all items are strings and remove duplicates while preserving order
+        logApiCall(caller, `/images/${imageId}/tags`, startTime, true);
+        return [...new Set(tags.map((tag: unknown) => String(tag)))];
+    } catch (error) {
+        logApiCall(caller, `/images/${imageId}/tags`, startTime, false, error);
+        throw error;
     }
-    const data = await response.json();
-    // Handle both direct array and object with tags property
-    const tags: unknown[] = Array.isArray(data) ? data : (data.tags || []);
-    // Ensure all items are strings and remove duplicates while preserving order
-    return [...new Set(tags.map((tag: unknown) => String(tag)))];
 }
 
 export async function addImageTag(imageId: string, tag: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/images/${imageId}/tags`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ tag }),
-    });
-    if (!response.ok) {
-        throw new Error('Failed to add tag');
+    const startTime = Date.now();
+    const caller = getCallerName();
+    try {
+        const response = await fetch(`${API_BASE_URL}/images/${imageId}/tags`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ tag }),
+        });
+        if (!response.ok) {
+            throw new Error('Failed to add tag');
+        }
+        logApiCall(caller, `/images/${imageId}/tags`, startTime, true);
+    } catch (error) {
+        logApiCall(caller, `/images/${imageId}/tags`, startTime, false, error);
+        throw error;
+    }
+}
+
+export async function getCustomTags(imageId: string): Promise<string[]> {
+    const startTime = Date.now();
+    const caller = getCallerName();
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/images/${imageId}/custom-tags`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch custom tags');
+        }
+        const data = await response.json();
+
+        // Handle both direct array and object with tags property
+        const tags: unknown[] = Array.isArray(data) ? data : (data.tags || []);
+        // Ensure all items are strings and remove duplicates while preserving order
+
+        logApiCall(caller, `/images/${imageId}/custom-tags`, startTime, true);
+        return [...new Set(tags.map((tag: unknown) => String(tag)))];
+    } catch (error) {
+        logApiCall(caller, `/images/${imageId}/custom-tags`, startTime, false, error);
+        console.error('Error fetching custom tags:', error);
+        throw error;
     }
 }

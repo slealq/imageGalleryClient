@@ -314,9 +314,9 @@ declare global {
             const tagsStatusDot = document.querySelector('#tags-status .w-2');
             const tagsStatusText = document.querySelector('#tags-status span:last-child');
             if (tagsStatusDot && tagsStatusText) {
-                const hasTags = image.getMetadata()?.has_tags || false;
-                tagsStatusDot.className = `w-2 h-2 rounded-full ${hasTags ? 'bg-green-500' : 'bg-red-500'}`;
-                tagsStatusText.textContent = hasTags ? 'Has Tags' : 'No Tags';
+                const hasCustomTags = image.getMetadata()?.has_custom_tags || false;
+                tagsStatusDot.className = `w-2 h-2 rounded-full ${hasCustomTags ? 'bg-green-500' : 'bg-red-500'}`;
+                tagsStatusText.textContent = hasCustomTags ? 'Has Custom Tags' : 'No Tags';
             }
         }
 
@@ -360,6 +360,10 @@ declare global {
                                 });
                                 if (newNextImage) {
                                     this.updateModalContent(newNextImage);
+                                    // Reload tags if the tags modal is open
+                                    if (this.isTagsModalOpen && newNextImage.getId()) {
+                                        (window as any).openTagsModal(newNextImage.getId());
+                                    }
                                 } else {
                                     console.log('Still no next image after loading more. Current sequence:', {
                                         sequence: this.imageManager.getImageSequence(),
@@ -378,6 +382,10 @@ declare global {
 
             console.log('Updating modal content with next image');
             this.updateModalContent(nextImage);
+            // Reload tags if the tags modal is open
+            if (this.isTagsModalOpen && nextImage.getId()) {
+                (window as any).openTagsModal(nextImage.getId());
+            }
         }
 
         private updateModalContent(image: ImageWrapper): void {

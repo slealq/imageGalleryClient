@@ -18,6 +18,17 @@ const { imageId } = Astro.props;
         </div>
 
         <div class="mb-4">
+            <div id="custom-tags-status" class="text-sm text-gray-600 mb-4">
+                <!-- Custom tags status will be shown here -->
+            </div>
+
+            <div id="tag-suggestions" class="mb-2 hidden">
+                <h3 class="text-sm font-medium text-gray-700 mb-2">Suggested Tags:</h3>
+                <div id="suggestions-container" class="flex flex-wrap gap-2">
+                    <!-- Tag suggestions will be shown here -->
+                </div>
+            </div>
+
             <div class="flex gap-2 mb-4">
                 <input 
                     type="text" 
@@ -41,7 +52,7 @@ const { imageId } = Astro.props;
 </div>
 
 <script>
-    import { getImageTags, addImageTag } from '../utils/api';
+    import { getImageTags, addImageTag, getCustomTags } from '../utils/api';
 
     class TagsModal {
         private modal: HTMLElement | null = null;
@@ -49,7 +60,11 @@ const { imageId } = Astro.props;
         private addButton: HTMLElement | null = null;
         private input: HTMLInputElement | null = null;
         private tagsContainer: HTMLElement | null = null;
+        private customTagsStatus: HTMLElement | null = null;
         private currentImageId: string | null = null;
+        private suggestionsContainer: HTMLElement | null = null;
+        private tagSuggestions: HTMLElement | null = null;
+        private availableTags: string[] = [];
 
         constructor() {
             this.initializeElements();
@@ -63,6 +78,9 @@ const { imageId } = Astro.props;
             this.addButton = document.getElementById('add-tag-button');
             this.input = document.getElementById('new-tag-input') as HTMLInputElement;
             this.tagsContainer = document.getElementById('tags-container');
+            this.customTagsStatus = document.getElementById('custom-tags-status');
+            this.suggestionsContainer = document.getElementById('suggestions-container');
+            this.tagSuggestions = document.getElementById('tag-suggestions');
         }
 
         private setupEventListeners(): void {
@@ -74,12 +92,54 @@ const { imageId } = Astro.props;
                 }
             });
 
+            this.input?.addEventListener('input', () => {
+                this.updateTagSuggestions();
+            });
+
             // Close modal when clicking outside
             this.modal?.addEventListener('click', (e) => {
                 if (e.target === this.modal) {
                     this.closeModal();
                 }
             });
+        }
+
+        private async loadAvailableTags(): Promise<void> {
+            try {
+                this.availableTags = await window.imageManager.getAvailableTags();
+            } catch (error) {
+                console.error('Failed to load available tags:', error);
+            }
+        }
+
+        private updateTagSuggestions(): void {
+            if (!this.input || !this.suggestionsContainer || !this.tagSuggestions) return;
+
+            const inputValue = this.input.value.trim().toLowerCase();
+            if (!inputValue) {
+                this.tagSuggestions.classList.add('hidden');
+                return;
+            }
+
+            const matchingTags = this.availableTags.filter(tag => 
+                tag.toLowerCase().includes(inputValue)
+            ).slice(0, 10); // Limit to 10 suggestions
+
+            if (matchingTags.length === 0) {
+                this.tagSuggestions.classList.add('hidden');
+                return;
+            }
+
+            this.suggestionsContainer.innerHTML = matchingTags.map(tag => `
+                <button 
+                    class="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-full text-sm transition-colors"
+                    onclick="document.getElementById('new-tag-input').value = '${tag}'; document.getElementById('add-tag-button').click();"
+                >
+                    ${tag}
+                </button>
+            `).join('');
+
+            this.tagSuggestions.classList.remove('hidden');
         }
 
         private async handleAddTag(): Promise<void> {
@@ -91,7 +151,14 @@ const { imageId } = Astro.props;
             try {
                 await addImageTag(this.currentImageId, tag);
                 this.input.value = '';
-                await this.loadTags();
+                this.tagSuggestions?.classList.add('hidden');
+                
+                // Refresh both the image tags and available tags
+                await Promise.all([
+                    this.loadTags(),
+                    window.imageManager.refreshAvailableTags()
+                ]);
+                await this.loadAvailableTags();
             } catch (error) {
                 console.error('Failed to add tag:', error);
                 alert('Failed to add tag. Please try again.');
@@ -102,11 +169,41 @@ const { imageId } = Astro.props;
             if (!this.currentImageId || !this.tagsContainer) return;
 
             try {
-                const tags = await getImageTags(this.currentImageId);
+                const [tags, customTags] = await Promise.all([
+                    getImageTags(this.currentImageId),
+                    getCustomTags(this.currentImageId)
+                ]);
+                
                 this.renderTags(tags);
+                this.updateCustomTagsStatus(customTags.length > 0);
             } catch (error) {
                 console.error('Failed to load tags:', error);
                 this.tagsContainer.innerHTML = '<p class="text-red-500">Failed to load tags</p>';
+                this.customTagsStatus!.innerHTML = '<p class="text-red-500">Failed to load custom tags status</p>';
+            }
+        }
+
+        private updateCustomTagsStatus(hasCustomTags: boolean): void {
+            if (!this.customTagsStatus) return;
+            
+            if (hasCustomTags) {
+                this.customTagsStatus.innerHTML = `
+                    <div class="flex items-center gap-2 text-green-600">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        Has Custom Tags
+                    </div>
+                `;
+            } else {
+                this.customTagsStatus.innerHTML = `
+                    <div class="flex items-center gap-2 text-gray-500">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        No Custom Tags
+                    </div>
+                `;
             }
         }
 
@@ -138,7 +235,10 @@ const { imageId } = Astro.props;
             if (this.modal) {
                 this.modal.classList.remove('hidden');
                 document.body.style.overflow = 'hidden';
-                await this.loadTags();
+                await Promise.all([
+                    this.loadTags(),
+                    this.loadAvailableTags()
+                ]);
             }
         }
 

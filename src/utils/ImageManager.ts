@@ -1,4 +1,4 @@
-import { getImageCaption, saveImageCaption, getCroppedImage, fetchImageBlob, getCrop, API_BASE_URL, exportImages, warmupCache, fetchImagesMetadata, type ImagesMetadataResponse, type ImageGData } from './api';
+import { getImageCaption, saveImageCaption, getCroppedImage, fetchImageBlob, getCrop, API_BASE_URL, exportImages, warmupCache, fetchImagesMetadata, getCustomTags, getAvailableFilters, type ImagesMetadataResponse, type ImageGData } from './api';
 
 export interface ImageMetadata {
     id: string;
@@ -10,6 +10,7 @@ export interface ImageMetadata {
     has_caption?: boolean | null;
     has_crop?: boolean;
     has_tags?: boolean;
+    has_custom_tags?: boolean;
     is_selected?: boolean;
     caption?: string | null;
 }
@@ -37,7 +38,8 @@ export class ImageWrapper {
             await this.fetchCaption();
         }
 
-        // this.image = await fetchImageBlob(this.metadata.id);
+        // Check for custom tags
+        await this.checkCustomTags();
     }
 
     private async fetchCaption() {
@@ -49,6 +51,16 @@ export class ImageWrapper {
             console.error('Error fetching caption:', error);
             this.metadata.caption = null;
             this.metadata.has_caption = false;
+        }
+    }
+
+    private async checkCustomTags() {
+        try {
+            const customTags = await getCustomTags(this.metadata.id);
+            this.metadata.has_custom_tags = customTags.length > 0;
+        } catch (error) {
+            console.error('Error checking custom tags:', error);
+            this.metadata.has_custom_tags = false;
         }
     }
 
@@ -116,6 +128,10 @@ export class ImageWrapper {
     getImageBlob(): Blob | null {
         return this.image;
     }
+
+    hasCustomTags(): boolean {
+        return this.metadata.has_custom_tags || false;
+    }
 }
 
 export class ImageManager {
@@ -125,6 +141,7 @@ export class ImageManager {
     private baseUrl: string = API_BASE_URL;
     private currentFilter: FilterState = {};
     private warmupInProgress: boolean = false;
+    private availableTags: string[] = [];
 
     private constructor() {}
 
@@ -169,7 +186,8 @@ export class ImageManager {
                 img.created_at,
                 img.has_caption,
                 img.has_crop,
-                img.has_tags
+                img.has_tags,
+                img.has_custom_tags
             );
             
             const imageDuration = performance.now() - imageStartTime;
@@ -227,7 +245,8 @@ export class ImageManager {
         created: string,
         has_caption?: boolean,
         has_crop?: boolean,
-        has_tags?: boolean
+        has_tags?: boolean,
+        has_custom_tags?: boolean
     ): Promise<ImageWrapper> {
         const metadata: ImageMetadata = {
             id,
@@ -237,7 +256,8 @@ export class ImageManager {
             created,
             has_caption,
             has_crop,
-            has_tags
+            has_tags,
+            has_custom_tags
         };
         return this.addImage(metadata);
     }
@@ -379,6 +399,29 @@ export class ImageManager {
             this.warmupInProgress = false;
             console.log('Cache warmup process finished');
         }
+    }
+
+    public async getAvailableTags(): Promise<string[]> {
+        if (this.availableTags.length > 0) {
+            return this.availableTags;
+        }
+
+        try {
+            const filters = await getAvailableFilters();
+            // Filter tags to only include those that start with lowercase
+            this.availableTags = filters.tags.filter(tag => 
+                tag.length > 0 && tag[0] === tag[0].toLowerCase()
+            );
+            return this.availableTags;
+        } catch (error) {
+            console.error('Failed to fetch available tags:', error);
+            return [];
+        }
+    }
+
+    public async refreshAvailableTags(): Promise<void> {
+        this.availableTags = []; // Clear existing tags
+        await this.getAvailableTags();
     }
 }
 
