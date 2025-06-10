@@ -226,11 +226,16 @@ const { imageId } = Astro.props;
                 return;
             }
 
-            this.tagsContainer.innerHTML = tags.map(tag => `
-                <span class="px-3 py-1 bg-gray-100 rounded-full text-sm">
-                    ${tag}
-                </span>
-            `).join('');
+            this.tagsContainer.innerHTML = tags.map(tag => {
+                const isCustomTag = tag[0] === tag[0].toLowerCase();
+                const bgColor = isCustomTag ? 'bg-green-100' : 'bg-gray-100';
+                const textColor = isCustomTag ? 'text-green-700' : 'text-gray-700';
+                return `
+                    <span class="px-3 py-1 ${bgColor} ${textColor} rounded-full text-sm">
+                        ${tag}
+                    </span>
+                `;
+            }).join('');
         }
 
         private closeModal(): void {
