@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'http://192.168.68.56:8001';
+export const API_BASE_URL = 'http://192.168.68.62:8001';
 
 // Add logging utility
 const logApiCall = (caller: string, endpoint: string, startTime: number, success: boolean, error?: any) => {
@@ -76,20 +76,25 @@ const getCallerName = () => {
     }
 };
 
-export interface ImageGData {
+export interface GalleryImageMetadata {
     id: string;
     filename: string;
     size: number;
     created_at: string;
+    mime_type: string;
     width: number;
     height: number;
     has_caption: boolean;
     collection_name: string;
     has_tags: boolean;
     has_crop: boolean;
+    year: string;
+    tags: string[];
+    actors: string[];
     has_custom_tags: boolean;
-    mime_type: string;
-    url?: string;
+    custom_tags: string[];
+    caption: string | null; // also we should add this into the original data model
+    url?: string; // this property should get added in the original data model from the service
 }
 
 interface ImagesMetadataRequest {
@@ -102,7 +107,7 @@ interface ImagesMetadataRequest {
 }
 
 export interface ImagesMetadataResponse {
-    images: ImageGData[];
+    images: GalleryImageMetadata[];
     total_pages: number;
     total: number;
     page: number;
@@ -197,7 +202,7 @@ export async function fetchImagesMetadata({
         }
         const data = await response.json();
         // Ensure each image has a URL
-        data.images = data.images.map((img: ImageGData) => ({
+        data.images = data.images.map((img: GalleryImageMetadata) => ({
             ...img,
             url: getImageUrl(img.id)
         }));
@@ -239,7 +244,7 @@ export async function fetchImagesBatch({
         // Ensure each image has a URL
         return data.map((page: ImagesMetadataResponse) => ({
             ...page,
-            images: page.images.map((img: ImageGData) => ({
+            images: page.images.map((img: GalleryImageMetadata) => ({
                 ...img,
                 url: getImageUrl(img.id)
             }))
@@ -518,48 +523,6 @@ export async function getAvailableFilters(): Promise<Filters> {
         throw error;
     }
 }
-
-export async function warmupCache2({ 
-    startPage = 1, 
-    numPages = 3,
-    actor, 
-    tag, 
-    year, 
-    has_caption, 
-    has_crop 
-}: WarmupCacheParams = {}): Promise<WarmupCacheResponse> {
-    const startTime = Date.now();
-    const caller = getCallerName();
-    
-    const requestBody = {
-        start_page: startPage,
-        num_pages: numPages,
-        ...(actor && { actor }),
-        ...(tag && { tag }),
-        ...(year && { year }),
-        ...(has_caption !== undefined && { has_caption }),
-        ...(has_crop !== undefined && { has_crop })
-    };
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/cache/warmup`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestBody)
-        });
-        logApiCall(caller, '/cache/warmup', startTime, response.ok);
-        return {
-            status: response.status,
-            hasMorePages: response.ok
-        };
-    } catch (error) {
-        logApiCall(caller, '/cache/warmup', startTime, false, error);
-        console.error('Error warming up cache:', error);
-        throw error;
-    }
-} 
 
 export async function warmupCache({ 
     startPage = 1,

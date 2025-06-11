@@ -83,9 +83,9 @@ declare global {
     </div>
 </div>
 
-<CaptionModal imageId="" />
-<CropModal imageId="" />
-<TagsModal imageId="" />
+<CaptionModal />
+<CropModal />
+<TagsModal />
 
 <script>
     import { ImageManager, ImageWrapper } from '../utils/ImageManager';
@@ -101,8 +101,6 @@ declare global {
         private cropButton: HTMLElement | null = null;
         private tagsButton: HTMLElement | null = null;
         private selectionButton: HTMLElement | null = null;
-        private imageElements: HTMLImageElement[] = [];
-        private currentImageIndex: number = -1;
         private isLoadingMore: boolean = false;
         private currentImageId: string | null = null;
         private imageManager: ImageManager;
@@ -129,7 +127,6 @@ declare global {
             this.cropButton = document.getElementById('modal-crop-button');
             this.tagsButton = document.getElementById('modal-tags-button');
             this.selectionButton = document.getElementById('modal-selection-button');
-            this.imageElements = Array.from(document.querySelectorAll('img[data-filename]')) as HTMLImageElement[];
         }
 
         private setupModalStateObservers(): void {
@@ -303,7 +300,7 @@ declare global {
             const captionStatusDot = document.querySelector('#caption-status .w-2');
             const captionStatusText = document.querySelector('#caption-status span:last-child');
             if (captionStatusDot && captionStatusText) {
-                const hasCaption = image.getMetadata()?.has_caption || false;
+                const hasCaption = image.getHasCaption();
                 captionStatusDot.className = `w-2 h-2 rounded-full ${hasCaption ? 'bg-green-500' : 'bg-red-500'}`;
                 captionStatusText.textContent = hasCaption ? 'Has Caption' : 'No Caption';
             }
@@ -312,7 +309,7 @@ declare global {
             const cropStatusDot = document.querySelector('#crop-status .w-2');
             const cropStatusText = document.querySelector('#crop-status span:last-child');
             if (cropStatusDot && cropStatusText) {
-                const hasCrop = image.getMetadata()?.has_crop || false;
+                const hasCrop = image.getHasCrop();
                 cropStatusDot.className = `w-2 h-2 rounded-full ${hasCrop ? 'bg-green-500' : 'bg-red-500'}`;
                 cropStatusText.textContent = hasCrop ? 'Has Crop' : 'No Crop';
             }
@@ -321,7 +318,7 @@ declare global {
             const tagsStatusDot = document.querySelector('#tags-status .w-2');
             const tagsStatusText = document.querySelector('#tags-status span:last-child');
             if (tagsStatusDot && tagsStatusText) {
-                const hasCustomTags = image.getMetadata()?.has_custom_tags || false;
+                const hasCustomTags = image.getHasCustomTags();
                 tagsStatusDot.className = `w-2 h-2 rounded-full ${hasCustomTags ? 'bg-green-500' : 'bg-red-500'}`;
                 tagsStatusText.textContent = hasCustomTags ? 'Has Custom Tags' : 'No Tags';
             }
@@ -404,7 +401,7 @@ declare global {
             if (this.modalFilename) this.modalFilename.textContent = image.getFilename();
             if (this.modalSize) this.modalSize.textContent = this.formatFileSize(image.getSize());
             if (this.modalCreated) this.modalCreated.textContent = this.formatDate(image.getCreated());
-            if (this.modalCollection) this.modalCollection.textContent = image.getMetadata().collection_name || '';
+            if (this.modalCollection) this.modalCollection.textContent = image.getCollectionName();
 
             // Update selection button state from ImageManager
             this.updateSelectionButton(image.isSelected());

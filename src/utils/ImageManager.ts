@@ -1,19 +1,24 @@
-import { getImageCaption, saveImageCaption, getCroppedImage, fetchImageBlob, getCrop, API_BASE_URL, exportImages, warmupCache, fetchImagesMetadata, getCustomTags, getAvailableFilters, type ImagesMetadataResponse, type ImageGData } from './api';
-
-export interface ImageMetadata {
-    id: string;
-    url: string;
-    filename: string;
-    size: number;
-    created: string;
-    collection_name?: string;
-    has_caption?: boolean | null;
-    has_crop?: boolean;
-    has_tags?: boolean;
-    has_custom_tags?: boolean;
-    is_selected?: boolean;
-    caption?: string | null;
-}
+import { 
+    addImageTag,
+    API_BASE_URL, 
+    cropImage, 
+    exportImages, 
+    fetchImageBlob, 
+    fetchImagesMetadata, 
+    getAvailableFilters, 
+    getCrop, 
+    getCroppedImage, 
+    getCustomTags, 
+    getImageCaption,
+    getImagePreviewUrl,
+    saveImageCaption, 
+    streamImageCaption,
+    warmupCache, 
+    type CropInfo, 
+    type GalleryImageMetadata,
+    type ImagesMetadataResponse,
+    type NormalizedDeltas,
+} from './api';
 
 export interface FilterState {
     actor?: string;
@@ -23,16 +28,25 @@ export interface FilterState {
     has_crop?: boolean;
 }
 
+export interface ImageManagerFetchResponse {
+    images: ImageWrapper[];
+    page: number;
+    total_pages: number;
+}
+
 export class ImageWrapper {
-    private metadata: ImageMetadata;
-    private croppedImage: Blob | null = null;
+    private metadata: GalleryImageMetadata;
+    private is_selected: boolean;
+    private crop_info: CropInfo | null = null;
+    private cropped_image_url: string | null = null;
     private image: Blob | null = null;
 
-    constructor(metadata: ImageMetadata) {
+    constructor(metadata: GalleryImageMetadata) {
         this.metadata = metadata;
+        this.is_selected = false;
     }
 
-    async initialize() {
+    public async initialize() {
         // Only fetch caption if we know the image has one
         if (this.metadata.has_caption) {
             await this.fetchCaption();
@@ -56,80 +70,201 @@ export class ImageWrapper {
 
     private async checkCustomTags() {
         try {
-            const customTags = await getCustomTags(this.metadata.id);
-            this.metadata.has_custom_tags = customTags.length > 0;
+            // const customTags = await getCustomTags(this.metadata.id);
+            // this.metadata.has_custom_tags = customTags.length > 0;
         } catch (error) {
             console.error('Error checking custom tags:', error);
             this.metadata.has_custom_tags = false;
         }
     }
 
-    getId(): string {
+    public getId(): string {
         return this.metadata.id;
     }
 
-    getUrl(): string {
-        return this.metadata.url;
+    public getUrl(): string {
+        return this.metadata.url ?? '';
     }
 
-    getFilename(): string {
+    public getUrlCropPreview(targetSize: number): string {
+        return getImagePreviewUrl(this.metadata.id, targetSize);
+    }
+
+    public async executeCrop(
+        targetSize: number, 
+        normalizedDeltas: NormalizedDeltas
+    ) {
+        await cropImage(
+            this.metadata.id,
+            targetSize,
+            normalizedDeltas
+        )
+
+        // Since we are executing the crop, assuming the execute works, update the crop info here as well
+        if (this.crop_info == null) {
+            this.crop_info = {targetSize: 0, normalizedDeltas: {x: 0, y: 0}}
+        }
+
+        this.crop_info.targetSize = targetSize;
+        this.crop_info.normalizedDeltas = normalizedDeltas;
+
+        this.metadata.has_crop = true;
+    }
+
+    private async tryUpdateCropInfo() {
+        try {
+            console.log(`Try getting crop info for ${this.metadata.id}`);
+
+            const cropResponse = await getCrop(this.metadata.id);
+
+            this.crop_info = cropResponse.cropInfo;
+            this.cropped_image_url = `${API_BASE_URL}${cropResponse.imageUrl}`;
+
+            console.log(`cropped image url -> ${this.metadata.id}`);
+
+        }
+        catch (error) {
+            console.log("Error getting croppeged image url");
+            return null;
+        }
+    }
+
+    public async getCroppedImageUrl(): Promise<string | null> {
+
+        if (this.cropped_image_url) {
+            return this.cropped_image_url;
+        }
+
+        if (!this.getHasCrop) {
+            return null;
+        }
+
+        await this.tryUpdateCropInfo();
+
+        return this.cropped_image_url;
+    }
+
+    public async getCroppedImageInfo() : Promise<CropInfo | null> {
+        if (this.crop_info) {
+            return this.crop_info;
+        }
+
+        if (!this.getHasCrop()) {
+            return null;
+        }
+
+        await this.tryUpdateCropInfo();
+
+        return this.crop_info;
+    }
+
+    public getHasTags(): boolean {
+        return this.metadata.has_tags;
+    }
+
+    public getTags(): string[] {
+        return this.metadata.tags;
+    }
+
+    public getHasCrop(): boolean {
+        return this.metadata.has_crop;
+    }
+
+    public getHasCaption(): boolean {
+        return this.metadata.has_caption;
+    }
+
+    public getFilename(): string {
         return this.metadata.filename;
     }
 
-    getSize(): number {
+    public getCollectionName(): string {
+        return this.metadata.collection_name;
+    }
+
+    public getSize(): number {
         return this.metadata.size;
     }
 
-    getCreated(): string {
-        return this.metadata.created;
+    public getSizeStr(): string {
+        return this.getSize().toString();
     }
 
-    getMetadata(): ImageMetadata {
+    public getCreated(): string {
+        return this.metadata.created_at;
+    }
+
+    private getMetadata(): GalleryImageMetadata {
         return this.metadata;
     }
 
-    async getCaption(): Promise<string> {
+    public async getCaption(): Promise<string> {
         if (this.metadata.has_caption === null) {
             await this.fetchCaption();
         }
         return this.metadata.caption || '';
     }
 
-    async saveCaption(caption: string): Promise<void> {
+    public async saveCaption(caption: string): Promise<void> {
         await saveImageCaption(this.metadata.id, caption);
         this.metadata.caption = caption;
         this.metadata.has_caption = caption.length > 0;
     }
 
-    async getCroppedImage(): Promise<Blob | null> {
-        if (!this.metadata.has_crop) {
-            return null;
-        }
-        try {
-            return await getCroppedImage(this.metadata.id);
-        } catch (error) {
-            console.error('Error fetching cropped image:', error);
-            return null;
-        }
+    public async startImageCaptionGeneration(
+        prompt: string | undefined,
+        onChunk: (chunk: string) => void,
+        onComplete: (finalCaption: string) => void,
+        onError: (error: Error) => void
+    ): Promise<void> {
+        
+        await streamImageCaption(
+            this.metadata.id,
+            prompt,
+            onChunk,
+            onComplete,
+            onError
+        );
     }
 
-    updateMetadata(properties: Partial<ImageMetadata>) {
+    private updateMetadata(properties: Partial<GalleryImageMetadata>) {
         this.metadata = { ...this.metadata, ...properties };
     }
 
-    setSelected(selected: boolean) {
-        this.metadata.is_selected = selected;
+    public setSelected(selected: boolean) {
+        this.is_selected = selected;
     }
 
-    isSelected(): boolean {
-        return this.metadata.is_selected || false;
+    public isSelected(): boolean {
+        return this.is_selected || false;
     }
 
-    getImageBlob(): Blob | null {
+    public getImageBlob(): Blob | null {
         return this.image;
     }
 
-    hasCustomTags(): boolean {
+    public async addCustomTag(tag: string) {
+        await addImageTag(this.metadata.id, tag);
+
+        this.metadata.has_custom_tags = true;
+        if (this.metadata.custom_tags == null) {
+            this.metadata.custom_tags = [ ];
+        }
+
+        this.metadata.custom_tags.push(tag);
+    }
+
+    public async getCustomTags() {
+        if (!this.metadata.has_custom_tags) return [];
+
+        return this.metadata.custom_tags;
+    }
+
+    public setHasCustomTags(value: boolean) {
+        this.metadata.has_custom_tags = value;
+    }
+
+    public getHasCustomTags(): boolean {
         return this.metadata.has_custom_tags || false;
     }
 }
@@ -152,15 +287,17 @@ export class ImageManager {
         return ImageManager.instance;
     }
 
-    getImageUrl(imageId: string): string {
+    private getImageUrl(imageId: string): string {
         return `${this.baseUrl}/images/${imageId}`;
     }
 
-    public async fetchImagesMetadata(pageNum: number) : Promise<ImagesMetadataResponse> {
+    public async fetchImagesMetadata(pageNum: number) : Promise<ImageManagerFetchResponse> {
         const response = await fetchImagesMetadata({ 
             page: pageNum,
             ...this.getCurrentFilter()
           });
+
+        const wrappedImages = await this.addImages(response.images);
 
         // Fire and forget warmup for next page
         console.log('WARMUP: Calling from load images')
@@ -168,27 +305,20 @@ export class ImageManager {
             console.error('Error during background warmup:', error);
         });
 
-        return response;
+        return {
+            images: wrappedImages,
+            page: response.page,
+            total_pages: response.total_pages
+        };
     }
 
-    public async updateImages(imagesMetadata: ImageGData[]) {
+    private async addImages(imagesMetadata: GalleryImageMetadata[]): Promise<ImageWrapper[]> {
         // Create ImageData objects and add them to ImageManager
         const images = await Promise.all(
-            imagesMetadata.map(async (img: ImageGData) => {
-            const imageUrl = img.url || this.getImageUrl(img.id);
+            imagesMetadata.map(async (img: GalleryImageMetadata) => {
             const imageStartTime = performance.now();
             
-            const imageData = await this.createImageFromUrl(
-                imageUrl,
-                img.id,
-                img.filename,
-                img.size,
-                img.created_at,
-                img.has_caption,
-                img.has_crop,
-                img.has_tags,
-                img.has_custom_tags
-            );
+            const imgWrapper = this.addImage(img);
             
             const imageDuration = performance.now() - imageStartTime;
             if (imageDuration > 500) {
@@ -199,14 +329,14 @@ export class ImageManager {
                 });
             }
             
-            return imageData;
+            return imgWrapper;
             })
         );
 
         return images;
     }
 
-    async addImage(metadata: ImageMetadata): Promise<ImageWrapper> {
+    private async addImage(metadata: GalleryImageMetadata): Promise<ImageWrapper> {
         const image = new ImageWrapper(metadata);
         await image.initialize();
         this.images.set(metadata.id, image);
@@ -217,61 +347,32 @@ export class ImageManager {
         return image;
     }
 
+    public getImage(id: string): ImageWrapper | undefined {
+        return this.images.get(id);
+    }
+
     // New method to set the image sequence
-    setImageSequence(imageIds: string[]): void {
+    public setImageSequence(imageIds: string[]): void {
         // Filter out any IDs that don't exist in our images map
         const validIds = imageIds.filter(id => this.images.has(id));
         this.imageSequence = validIds;
     }
 
     // New method to get the current sequence
-    getImageSequence(): string[] {
+    public getImageSequence(): string[] {
         return [...this.imageSequence];
     }
 
-    getImage(id: string): ImageWrapper | undefined {
-        return this.images.get(id);
-    }
-
-    getImageProperties(id: string): ImageMetadata | undefined {
-        return this.images.get(id)?.getMetadata();
-    }
-
-    async createImageFromUrl(
-        url: string, 
-        id: string, 
-        filename: string, 
-        size: number, 
-        created: string,
-        has_caption?: boolean,
-        has_crop?: boolean,
-        has_tags?: boolean,
-        has_custom_tags?: boolean
-    ): Promise<ImageWrapper> {
-        const metadata: ImageMetadata = {
-            id,
-            url,
-            filename,
-            size,
-            created,
-            has_caption,
-            has_crop,
-            has_tags,
-            has_custom_tags
-        };
-        return this.addImage(metadata);
-    }
-
-    getSelectedImages(): ImageWrapper[] {
+    public getSelectedImages(): ImageWrapper[] {
         return Array.from(this.images.values()).filter(img => img.isSelected());
     }
 
-    clearSelection() {
+    public clearSelection() {
         this.images.forEach(img => img.setSelected(false));
     }
 
     // Updated navigation methods to use the sequence
-    getNextImage(currentId: string): ImageWrapper | undefined {
+    public getNextImage(currentId: string): ImageWrapper | undefined {
         const currentIndex = this.getImageIndex(currentId);
         if (currentIndex === -1 || currentIndex === this.imageSequence.length - 1) {
             return undefined;
@@ -279,7 +380,7 @@ export class ImageManager {
         return this.images.get(this.imageSequence[currentIndex + 1]);
     }
 
-    getPreviousImage(currentId: string): ImageWrapper | undefined {
+    public getPreviousImage(currentId: string): ImageWrapper | undefined {
         const currentIndex = this.getImageIndex(currentId);
 
         if (currentIndex <= 0) {
@@ -288,17 +389,17 @@ export class ImageManager {
         return this.images.get(this.imageSequence[currentIndex - 1]);
     }
 
-    getImageIndex(id: string): number {
+    public getImageIndex(id: string): number {
         console.log(`Image sequence has ${this.imageSequence.length} values`);
 
         return this.imageSequence.indexOf(id);
     }
 
-    getTotalImages(): number {
+    public getTotalImages(): number {
         return this.imageSequence.length;
     }
 
-    async exportSelectedImages(): Promise<void> {
+    public async exportSelectedImages(): Promise<void> {
         const selectedImages = this.getSelectedImages();
         if (selectedImages.length === 0) {
             throw new Error('No images selected');
@@ -307,8 +408,8 @@ export class ImageManager {
         console.log('Selected images for export:', selectedImages.map(img => ({
             id: img.getId(),
             filename: img.getFilename(),
-            hasCrop: img.getMetadata().has_crop,
-            hasCaption: img.getMetadata().has_caption
+            hasCrop: img.getHasCrop(),
+            hasCaption: img.getHasCaption()
         })));
 
         try {

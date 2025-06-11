@@ -75,29 +75,29 @@ const GalleryReact: React.FC<GalleryReactProps> = () => {
       
       const processStartTime = performance.now();
 
-      const newImages = await imageManager.current.updateImages(response.images);
+      // const newImages = await imageManager.current.updateImages(newImages);
 
       const processDuration = performance.now() - processStartTime;
       console.log('✅ Image processing completed', {
         duration: `${(processDuration / 1000).toFixed(2)}s`,
-        totalImages: newImages.length,
-        averageTimePerImage: `${(processDuration / newImages.length).toFixed(2)}ms`,
+        totalImages: response.images.length,
+        averageTimePerImage: `${(processDuration / response.images.length).toFixed(2)}ms`,
         timestamp: new Date().toLocaleTimeString()
       });
 
       // Update the sequence in ImageManager
       const sequenceStartTime = performance.now();
-      updateImageManagerSequence(newImages);
+      updateImageManagerSequence(response.images);
       const sequenceDuration = performance.now() - sequenceStartTime;
       console.log('🔄 Sequence update completed', {
         duration: `${(sequenceDuration / 1000).toFixed(2)}s`,
-        imagesCount: newImages.length,
+        imagesCount: response.images.length,
         timestamp: new Date().toLocaleTimeString()
       });
 
       const stateUpdateStartTime = performance.now();
       setImages(prevImages => {
-        const updatedImages = pageNum === 1 ? newImages : [...prevImages, ...newImages];
+        const updatedImages = pageNum === 1 ? response.images : [...prevImages, ...response.images];
         return updatedImages;
       });
       const stateUpdateDuration = performance.now() - stateUpdateStartTime;
@@ -243,7 +243,7 @@ const GalleryReact: React.FC<GalleryReactProps> = () => {
     console.log('Image clicked:', {
       id: image.getId(),
       url: image.getUrl(),
-      filename: image.getMetadata().filename
+      filename: image.getFilename()
     });
 
     if (typeof window !== 'undefined' && window.openModal) {
@@ -252,13 +252,13 @@ const GalleryReact: React.FC<GalleryReactProps> = () => {
       
       window.openModal(
         imageUrl,
-        image.getMetadata().filename,
-        image.getMetadata().size.toString(),
-        image.getMetadata().created,
+        image.getFilename(),
+        image.getSizeStr(),
+        image.getCreated(),
         image.getId(),
-        image.getMetadata().has_caption || false,
-        image.getMetadata().has_tags || false,
-        image.getMetadata().collection_name || ''
+        image.getHasCaption(),
+        image.getHasTags(),
+        image.getCollectionName()
       );
     }
   };
@@ -329,13 +329,16 @@ const GalleryReact: React.FC<GalleryReactProps> = () => {
         {imagesBucket.map((image, index) => {
           const isSelected = image.isSelected();
           const imageUrl = image.getUrl();
-          const metadata = image.getMetadata();
-          const imageId = metadata.id;
+          const filename = image.getFilename();
+          const has_caption = image.getHasCaption();
+          const has_crop = image.getHasCrop();
+          const has_custom_tags = image.getHasCustomTags();
+          const imageId = image.getId();
           const isLoaded = loadedImages.has(imageId);
           
           return (
             <div
-              key={metadata.id}
+              key={imageId}
               ref={index === imagesBucket.length - 1 ? lastImageRef : null}
               className="relative group"
               onClick={() => handleImageClick(image)}
@@ -344,7 +347,7 @@ const GalleryReact: React.FC<GalleryReactProps> = () => {
                 {/* Single image with loading state */}
                 <img
                   src={imageUrl}
-                  alt={metadata.filename}
+                  alt={filename}
                   className={`w-full h-full object-cover transition-opacity duration-300 ${
                     isLoaded ? 'opacity-100' : 'opacity-0'
                   }`}
@@ -357,18 +360,18 @@ const GalleryReact: React.FC<GalleryReactProps> = () => {
                 )}
                 {/* Status indicators */}
                 <div className="absolute top-2 left-2 flex gap-1">
-                  {metadata.has_caption && (
+                  {has_caption && (
                     <div className="w-2 h-2 rounded-full bg-blue-500 border border-white shadow-sm"></div>
                   )}
-                  {metadata.has_crop && (
+                  {has_crop && (
                     <div className="w-2 h-2 rounded-full bg-purple-500 border border-white shadow-sm"></div>
                   )}
-                  {metadata.has_custom_tags && (
+                  {has_custom_tags && (
                     <div className="w-2 h-2 rounded-full bg-green-500 border border-white shadow-sm"></div>
                   )}
                 </div>
                 <button
-                  onClick={(e) => handleSelectionClick(e, metadata.id)}
+                  onClick={(e) => handleSelectionClick(e, imageId)}
                   className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 border-white transition-colors ${
                     isSelected ? 'bg-green-500' : 'bg-black/50 hover:bg-black/70'
                   }`}

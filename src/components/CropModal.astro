@@ -1,12 +1,3 @@
----
-interface Props {
-    imageId: string;
-}
-
-const { imageId } = Astro.props;
----
-
-<!-- Crop Modal -->
 <div id="crop-modal" class="fixed inset-0 bg-black/90 hidden z-[70] flex items-center justify-center">
     <div class="relative w-full h-full flex flex-col">
         <div class="flex justify-between items-center mb-4">
@@ -55,8 +46,8 @@ const { imageId } = Astro.props;
 </div>
 
 <script>
-    import { getImageUrl, getImagePreviewUrl, cropImage, getCrop } from '../utils/api';
-    import { ImageManager } from '../utils/ImageManager';
+    import { Image } from 'astro:assets';
+import { ImageManager } from '../utils/ImageManager';
     import type { NormalizedDeltas } from '../utils/api';
 
     type CropBoxPosition = {
@@ -72,13 +63,14 @@ const { imageId } = Astro.props;
         toBottom: number;
     }
 
-
     class CropboxHandler {
         imagePreviewElement: HTMLImageElement;
         cropBoxElement: HTMLElement;
 
         normalizedDeltaX: number;
         normalizedDeltaY: number;
+
+        imageManagerSingleton: ImageManager;
 
         constructor(
             imagePreviewElement: HTMLImageElement,
@@ -89,6 +81,8 @@ const { imageId } = Astro.props;
 
             this.normalizedDeltaX = initialDeltas?.x ?? 0;
             this.normalizedDeltaY = initialDeltas?.y ?? 0;
+
+            this.imageManagerSingleton = ImageManager.getInstance();
         }
 
         applyDelta(deltaX: number, deltaY: number) {
@@ -349,7 +343,8 @@ const { imageId } = Astro.props;
     let cropModal: HTMLElement | null = null;
     let cropPreview: HTMLImageElement | null = null;
     let cropBox: HTMLElement | null = null;
-    let cropOverlay: HTMLElement | null = null;
+
+    let imageManagerSingleton = ImageManager.getInstance();
 
     function updateButtonStyles(selectedButton: HTMLElement) {
         // Reset all buttons to default style
@@ -392,19 +387,12 @@ const { imageId } = Astro.props;
         if (!currentImageId || !cropBox || !cropBoxHandler) return;
         
         try {
-            const blob = await cropImage(
-                currentImageId,
+            const imageWrapper = imageManagerSingleton.getImage(currentImageId);
+
+            imageWrapper?.executeCrop(
                 selectedRatio || 1024, // Default to 1024 if original size
                 cropBoxHandler.getNormalizedDeltas()
             );
-            
-            const url = URL.createObjectURL(blob);
-            
-            // Update the image in the ImageManager
-            const image = window.imageManager.getImage(currentImageId);
-            if (image) {
-                image.updateMetadata({ has_crop: true });
-            }
 
             // Update the has_crop property on the image element
             const imageElement = document.querySelector(`img[data-id="${currentImageId}"]`);
@@ -435,11 +423,7 @@ const { imageId } = Astro.props;
     function updateRatio(size: number | null, button: HTMLElement) {
         selectedRatio = size;
         if (currentImageId && cropPreview) {
-            // Store current dimensions
-            const currentWidth = cropPreview.width;
-            const currentHeight = cropPreview.height;
-
-            const image = window.imageManager.getImage(currentImageId);
+            const image = imageManagerSingleton.getImage(currentImageId);
             if (!image) return;
 
             if (size === null) {
@@ -447,7 +431,7 @@ const { imageId } = Astro.props;
                 cropPreview.src = image.getUrl();
             } else {
                 // Use preview with specified size
-                cropPreview.src = getImagePreviewUrl(currentImageId, size);
+                cropPreview.src = image.getUrlCropPreview(size);
             }
 
             // After image loads, restore dimensions
@@ -545,7 +529,7 @@ const { imageId } = Astro.props;
         cropModal = document.getElementById('crop-modal');
         cropPreview = document.getElementById('crop-preview') as HTMLImageElement;
         cropBox = document.getElementById('crop-box');
-        cropOverlay = document.getElementById('crop-overlay');
+        //cropOverlay = document.getElementById('crop-overlay');
 
         // Set initial cursor style
         if (cropBox) {
@@ -606,19 +590,19 @@ const { imageId } = Astro.props;
     (window as any).openCropModal = async (imageId: string) => {
         currentImageId = imageId;
         if (cropPreview) {
-            const image = window.imageManager.getImage(imageId);
+            const image = imageManagerSingleton.getImage(imageId);
             if (!image) return;
 
-            try {
+            if (image.getHasCrop()) {
                 // Check if image has existing crop
-                const cropResponse = await getCrop(imageId);
-                selectedRatio = cropResponse.cropInfo.targetSize;
+                const cropInfo = (await image.getCroppedImageInfo())!;
+                selectedRatio = cropInfo?.targetSize ?? null;
                 
                 // Set preview with the target size
-                cropPreview.src = getImagePreviewUrl(imageId, cropResponse.cropInfo.targetSize);
+                cropPreview.src = (await image.getUrlCropPreview(selectedRatio))!;
                 
                 // Update button styles
-                const button = document.getElementById(`crop-${cropResponse.cropInfo.targetSize}`);
+                const button = document.getElementById(`crop-${cropInfo.targetSize}`);
                 if (button) {
                     updateButtonStyles(button);
                 }
@@ -631,11 +615,12 @@ const { imageId } = Astro.props;
                 // Initialize crop box with existing deltas
                 if (cropBox && cropPreview) {
                     cropBoxHandler?.setNormalizedDeltas(
-                        cropResponse.cropInfo.normalizedDeltas.x,
-                        cropResponse.cropInfo.normalizedDeltas.y
+                        cropInfo.normalizedDeltas.x,
+                        cropInfo.normalizedDeltas.y
                     );
                 }
-            } catch (error) {
+            }
+            else {
                 // If no crop exists, start with original size
                 cropPreview.src = image.getUrl();
                 selectedRatio = null;

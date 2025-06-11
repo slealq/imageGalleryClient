@@ -1,11 +1,3 @@
----
-interface Props {
-    imageId: string;
-}
-
-const { imageId } = Astro.props;
----
-
 <!-- Caption Modal - Appears on top of the FullscreenModal -->
 <div id="caption-modal" class="fixed inset-0 bg-black/90 hidden z-[60] flex items-center justify-center transition-opacity duration-200">
     <div id="caption-box" class="bg-gray-900/90 rounded-lg p-6 w-full max-w-2xl mx-4 transition-opacity duration-200 relative">
@@ -68,7 +60,6 @@ const { imageId } = Astro.props;
 </div>
 
 <script>
-    import { generateImageCaption, streamImageCaption, getCrop, getImagePreviewUrl, API_BASE_URL, getImageUrl } from '../utils/api';
     import { ImageManager } from '../utils/ImageManager';
 
     let captionModal: HTMLElement | null = null;
@@ -87,6 +78,8 @@ const { imageId } = Astro.props;
     let timerInterval: number | null = null;
     let startTime: number | null = null;
     let isGenerating = false;
+
+    const imageManager = ImageManager.getInstance()
 
     function updateOpacity(value: number) {
         currentOpacity = value;
@@ -149,7 +142,7 @@ const { imageId } = Astro.props;
     async function loadCaption() {
         if (!currentImageId || !captionText) return;
         try {
-            const image = window.imageManager.getImage(currentImageId);
+            const image = imageManager.getImage(currentImageId);
             if (!image) return;
 
             const caption = await image.getCaption();
@@ -182,9 +175,10 @@ const { imageId } = Astro.props;
         
         try {
             startTimer();
+
+            const imageWrapper = imageManager.getImage(currentImageId);
             
-            await streamImageCaption(
-                currentImageId,
+            imageWrapper?.startImageCaptionGeneration(
                 prompt,
                 (chunk) => {
                     // Update the caption input with each chunk
@@ -258,7 +252,7 @@ const { imageId } = Astro.props;
             if (currentImageId) {
                 const fullscreenImage = document.getElementById('modal-image') as HTMLImageElement;
                 if (fullscreenImage) {
-                    fullscreenImage.src = getImageUrl(currentImageId);
+                    fullscreenImage.src = imageManager.getImage(currentImageId)?.getUrl() ?? "";
                 }
             }
         });
@@ -352,18 +346,15 @@ const { imageId } = Astro.props;
             captionText.value = currentCaption;
         }
 
-        // Check if image has a crop and update the fullscreen modal image
-        try {
-            const image = window.imageManager.getImage(imageId);
-            if (!image) return;
+        const imageWrapper = imageManager.getImage(imageId);
 
-            const cropResponse = await getCrop(imageId);
+        if (imageWrapper?.getHasCrop) {
+            const cropImageUrl = await imageWrapper.getCroppedImageUrl();
+
             const fullscreenImage = document.getElementById('modal-image') as HTMLImageElement;
-            if (fullscreenImage) {
-                fullscreenImage.src = `${API_BASE_URL}${cropResponse.imageUrl}`;
-            }
-        } catch (error) {
-            // If no crop exists, do nothing - the original image will be shown
+
+            // if fetching the cropImageUrl fails for some reason, keep original image
+            fullscreenImage.src = cropImageUrl ?? fullscreenImage.src;
         }
 
         loadCaption();
